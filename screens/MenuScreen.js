@@ -2,12 +2,11 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  ActivityIndicator, Image
+  ActivityIndicator, Image, TouchableOpacity
 } from 'react-native';
 import api from '../services/api';
 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Evening Snacks', 'Dinner'];
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 export default function MenuScreen() {
   const [menu, setMenu] = useState([]);
@@ -17,15 +16,15 @@ export default function MenuScreen() {
   useEffect(() => {
     const fetchMenu = async () => {
       try {
-        const response = await api.get('/api/Menu');
+        const response = await api.get('/Menu');
         setMenu(response.data);
       } catch (err) {
+        console.log('MENU ERROR:', err.response?.status, err.response?.data);
         setError('Failed to load menu. Please try again.');
       } finally {
         setLoading(false);
       }
     };
-
     fetchMenu();
   }, []);
 
@@ -50,51 +49,38 @@ export default function MenuScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Weekly Menu</Text>
 
-      {DAYS.map((day) => {
-        const dayItems = menu.filter(
-          (item) => item.day?.toLowerCase() === day.toLowerCase()
-        );
-        if (dayItems.length === 0) return null;
+      {menu.map((dayObj) => (
+        <View key={dayObj.day} style={styles.dayBlock}>
+          <Text style={styles.dayTitle}>{dayObj.day}</Text>
 
-        return (
-          <View key={day} style={styles.dayBlock}>
-            <Text style={styles.dayTitle}>{day}</Text>
+          {dayObj.meals?.map((mealObj) => (
+            <View key={mealObj.mealType} style={styles.mealTypeBlock}>
+              <Text style={styles.mealTypeTitle}>{mealObj.mealType}</Text>
 
-            {MEAL_TYPES.map((mealType) => {
-              const items = dayItems.filter(
-                (item) => item.mealType?.toLowerCase() === mealType.toLowerCase()
-              );
-              if (items.length === 0) return null;
-
-              return (
-                <View key={mealType} style={styles.mealTypeBlock}>
-                  <Text style={styles.mealTypeTitle}>{mealType}</Text>
-                  {items.map((item, index) => (
-                    <View key={index} style={styles.menuItem}>
-                      {item.photoUrl ? (
-                        <Image
-                          source={{ uri: item.photoUrl }}
-                          style={styles.itemImage}
-                        />
-                      ) : (
-                        <View style={styles.imagePlaceholder}>
-                          <Text style={styles.imagePlaceholderText}>🍽</Text>
-                        </View>
-                      )}
-                      <View style={styles.itemInfo}>
-                        <Text style={styles.itemName}>{item.name}</Text>
-                        {item.description ? (
-                          <Text style={styles.itemDesc}>{item.description}</Text>
-                        ) : null}
-                      </View>
+              {mealObj.items?.map((item) => (
+                <View key={item.menuItemID} style={styles.menuItem}>
+                  {item.photoUrl ? (
+                    <Image
+                      source={{ uri: item.photoUrl }}
+                      style={styles.itemImage}
+                    />
+                  ) : (
+                    <View style={styles.imagePlaceholder}>
+                      <Text style={styles.imagePlaceholderText}>🍽</Text>
                     </View>
-                  ))}
+                  )}
+                  <View style={styles.itemInfo}>
+                    <Text style={styles.itemName}>{item.itemName}</Text>
+                    {item.description ? (
+                      <Text style={styles.itemDesc}>{item.description}</Text>
+                    ) : null}
+                  </View>
                 </View>
-              );
-            })}
-          </View>
-        );
-      })}
+              ))}
+            </View>
+          ))}
+        </View>
+      ))}
     </ScrollView>
   );
 }
@@ -107,49 +93,25 @@ const styles = StyleSheet.create({
   errorText: { color: '#c0392b', fontSize: 15 },
   heading: { fontSize: 22, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 20 },
   dayBlock: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    elevation: 2,
+    backgroundColor: '#fff', borderRadius: 12,
+    padding: 16, marginBottom: 16, elevation: 2,
   },
   dayTitle: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: '#005f99',
-    marginBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    paddingBottom: 8,
+    fontSize: 17, fontWeight: 'bold', color: '#005f99',
+    marginBottom: 12, borderBottomWidth: 1,
+    borderBottomColor: '#eee', paddingBottom: 8,
   },
   mealTypeBlock: { marginBottom: 12 },
   mealTypeTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#888',
-    marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontSize: 13, fontWeight: '600', color: '#888',
+    marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5,
   },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  itemImage: {
-    width: 56,
-    height: 56,
-    borderRadius: 8,
-    marginRight: 12,
-  },
+  menuItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  itemImage: { width: 56, height: 56, borderRadius: 8, marginRight: 12 },
   imagePlaceholder: {
-    width: 56,
-    height: 56,
-    borderRadius: 8,
-    backgroundColor: '#f0f0f0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
+    width: 56, height: 56, borderRadius: 8,
+    backgroundColor: '#f0f0f0', alignItems: 'center',
+    justifyContent: 'center', marginRight: 12,
   },
   imagePlaceholderText: { fontSize: 24 },
   itemInfo: { flex: 1 },

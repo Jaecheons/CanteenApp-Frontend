@@ -1,5 +1,5 @@
 // screens/MyBookingsScreen.js
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
   TouchableOpacity, ActivityIndicator, RefreshControl
@@ -9,9 +9,7 @@ import api from '../services/api';
 
 const STATUS_COLORS = {
   confirmed: '#27ae60',
-  pending: '#f39c12',
   cancelled: '#c0392b',
-  completed: '#888',
 };
 
 export default function MyBookingsScreen({ navigation }) {
@@ -22,10 +20,11 @@ export default function MyBookingsScreen({ navigation }) {
 
   const fetchBookings = async () => {
     try {
-      const response = await api.get('/api/Bookings/my');
+      const response = await api.get('/bookings/my');
       setBookings(response.data);
       setError(null);
     } catch (err) {
+      console.log('MY BOOKINGS ERROR:', err.response?.status, err.response?.data);
       setError('Failed to load bookings. Please try again.');
     } finally {
       setLoading(false);
@@ -33,7 +32,6 @@ export default function MyBookingsScreen({ navigation }) {
     }
   };
 
-  // Refresh every time screen comes into focus
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
@@ -69,7 +67,7 @@ export default function MyBookingsScreen({ navigation }) {
   if (bookings.length === 0) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.emptyText}>No bookings found.</Text>
+        <Text style={styles.emptyText}>No bookings yet.</Text>
         <TouchableOpacity
           style={styles.retryBtn}
           onPress={() => navigation.navigate('BookMeal')}
@@ -81,7 +79,7 @@ export default function MyBookingsScreen({ navigation }) {
   }
 
   const renderItem = ({ item }) => {
-    const status = item.status?.toLowerCase() ?? 'pending';
+    const status = item.status?.toLowerCase() ?? 'confirmed';
     const statusColor = STATUS_COLORS[status] ?? '#888';
 
     return (
@@ -90,13 +88,15 @@ export default function MyBookingsScreen({ navigation }) {
         onPress={() => navigation.navigate('BookingDetail', { booking: item })}
       >
         <View style={styles.cardTop}>
-          <Text style={styles.bookingId}>#{item.bookingId ?? item.BookingID ?? item.id}</Text>
+          <Text style={styles.bookingId}>#{item.bookingID}</Text>
           <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-            <Text style={styles.statusText}>{item.status ?? 'Pending'}</Text>
+            <Text style={styles.statusText}>{item.status}</Text>
           </View>
         </View>
 
-        <Text style={styles.mealType}>{item.mealType}</Text>
+        <Text style={styles.mealType}>
+          {item.isSpecialMeal ? '🌟 ' : ''}{item.mealType}
+        </Text>
         <Text style={styles.dates}>
           {item.fromDate?.split('T')[0]} → {item.toDate?.split('T')[0]}
         </Text>
@@ -106,6 +106,11 @@ export default function MyBookingsScreen({ navigation }) {
             ? `👥 Guests (${item.guestCount} persons)`
             : '👤 Self'}
         </Text>
+
+        {/* Show edit/cancel hint only if modifiable */}
+        {item.canModify && (
+          <Text style={styles.modifyHint}>Tap to edit or cancel</Text>
+        )}
       </TouchableOpacity>
     );
   };
@@ -115,9 +120,7 @@ export default function MyBookingsScreen({ navigation }) {
       style={styles.container}
       contentContainerStyle={styles.content}
       data={bookings}
-      keyExtractor={(item, index) =>
-        String(item.bookingId ?? item.BookingID ?? item.id ?? index)
-      }
+      keyExtractor={(item) => String(item.bookingID)}
       renderItem={renderItem}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#005f99']} />
@@ -152,13 +155,11 @@ const styles = StyleSheet.create({
     alignItems: 'center', marginBottom: 8,
   },
   bookingId: { fontSize: 13, fontWeight: 'bold', color: '#005f99' },
-  statusBadge: {
-    paddingVertical: 3, paddingHorizontal: 10,
-    borderRadius: 20,
-  },
-  statusText: { color: '#fff', fontSize: 11, fontWeight: '600', textTransform: 'capitalize' },
+  statusBadge: { paddingVertical: 3, paddingHorizontal: 10, borderRadius: 20 },
+  statusText: { color: '#fff', fontSize: 11, fontWeight: '600' },
   mealType: { fontSize: 16, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 4 },
   dates: { fontSize: 13, color: '#555', marginBottom: 4 },
   outlet: { fontSize: 13, color: '#555', marginBottom: 4 },
   bookedFor: { fontSize: 13, color: '#555' },
+  modifyHint: { fontSize: 12, color: '#005f99', marginTop: 8, fontWeight: '600' },
 });
