@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  ActivityIndicator, Image, TouchableOpacity
+  ActivityIndicator, TouchableOpacity
 } from 'react-native';
 import api from '../services/api';
 
@@ -12,12 +12,17 @@ export default function MenuScreen() {
   const [menu, setMenu] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [expandedDay, setExpandedDay] = useState(null);
 
   useEffect(() => {
     const fetchMenu = async () => {
       try {
         const response = await api.get('/Menu');
         setMenu(response.data);
+
+        // Auto expand today's day
+        const todayName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
+        setExpandedDay(todayName);
       } catch (err) {
         console.log('MENU ERROR:', err.response?.status, err.response?.data);
         setError('Failed to load menu. Please try again.');
@@ -27,6 +32,10 @@ export default function MenuScreen() {
     };
     fetchMenu();
   }, []);
+
+  const toggleDay = (day) => {
+    setExpandedDay((prev) => (prev === day ? null : day));
+  };
 
   if (loading) {
     return (
@@ -49,38 +58,57 @@ export default function MenuScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Weekly Menu</Text>
 
-      {menu.map((dayObj) => (
-        <View key={dayObj.day} style={styles.dayBlock}>
-          <Text style={styles.dayTitle}>{dayObj.day}</Text>
+      {menu.map((dayObj) => {
+        const isExpanded = expandedDay === dayObj.day;
+        const isToday = dayObj.day === ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
 
-          {dayObj.meals?.map((mealObj) => (
-            <View key={mealObj.mealType} style={styles.mealTypeBlock}>
-              <Text style={styles.mealTypeTitle}>{mealObj.mealType}</Text>
+        return (
+          <View key={dayObj.day} style={styles.dayBlock}>
 
-              {mealObj.items?.map((item) => (
-                <View key={item.menuItemID} style={styles.menuItem}>
-                  {item.photoUrl ? (
-                    <Image
-                      source={{ uri: item.photoUrl }}
-                      style={styles.itemImage}
-                    />
-                  ) : (
-                    <View style={styles.imagePlaceholder}>
-                      <Text style={styles.imagePlaceholderText}>🍽</Text>
-                    </View>
-                  )}
-                  <View style={styles.itemInfo}>
-                    <Text style={styles.itemName}>{item.itemName}</Text>
-                    {item.description ? (
-                      <Text style={styles.itemDesc}>{item.description}</Text>
-                    ) : null}
+            {/* Day Header — tappable */}
+            <TouchableOpacity
+              style={[styles.dayHeader, isToday && styles.dayHeaderToday]}
+              onPress={() => toggleDay(dayObj.day)}
+              activeOpacity={0.8}
+            >
+              <View style={styles.dayHeaderLeft}>
+                {isToday && <Text style={styles.todayBadge}>TODAY</Text>}
+                <Text style={[styles.dayTitle, isToday && styles.dayTitleToday]}>
+                  {dayObj.day}
+                </Text>
+              </View>
+              <Text style={[styles.chevron, isToday && styles.dayTitleToday]}>
+                {isExpanded ? '▲' : '▼'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Dropdown content */}
+            {isExpanded && (
+              <View style={styles.dayContent}>
+                {dayObj.meals?.length === 0 && (
+                  <Text style={styles.emptyText}>No items for this day.</Text>
+                )}
+                {dayObj.meals?.map((mealObj) => (
+                  <View key={mealObj.mealType} style={styles.mealTypeBlock}>
+                    <Text style={styles.mealTypeTitle}>{mealObj.mealType}</Text>
+                    {mealObj.items?.map((item) => (
+                      <View key={item.menuItemID} style={styles.menuItem}>
+                        <View style={styles.itemDot} />
+                        <View style={styles.itemInfo}>
+                          <Text style={styles.itemName}>{item.itemName}</Text>
+                          {item.description ? (
+                            <Text style={styles.itemDesc}>{item.description}</Text>
+                          ) : null}
+                        </View>
+                      </View>
+                    ))}
                   </View>
-                </View>
-              ))}
-            </View>
-          ))}
-        </View>
-      ))}
+                ))}
+              </View>
+            )}
+          </View>
+        );
+      })}
     </ScrollView>
   );
 }
@@ -94,26 +122,56 @@ const styles = StyleSheet.create({
   heading: { fontSize: 22, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 20 },
   dayBlock: {
     backgroundColor: '#fff', borderRadius: 12,
-    padding: 16, marginBottom: 16, elevation: 2,
+    marginBottom: 10, elevation: 2, overflow: 'hidden',
+  },
+  dayHeader: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', padding: 16,
+    backgroundColor: '#fff',
+  },
+  dayHeaderToday: {
+    backgroundColor: '#005f99',
+  },
+  dayHeaderLeft: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+  },
+  todayBadge: {
+    backgroundColor: '#fff',
+    color: '#005f99',
+    fontSize: 10,
+    fontWeight: 'bold',
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 4,
   },
   dayTitle: {
-    fontSize: 17, fontWeight: 'bold', color: '#005f99',
-    marginBottom: 12, borderBottomWidth: 1,
-    borderBottomColor: '#eee', paddingBottom: 8,
+    fontSize: 16, fontWeight: 'bold', color: '#1a1a1a',
   },
-  mealTypeBlock: { marginBottom: 12 },
+  dayTitleToday: {
+    color: '#fff',
+  },
+  chevron: {
+    fontSize: 12, color: '#888', fontWeight: 'bold',
+  },
+  dayContent: {
+    padding: 16,
+    borderTopWidth: 1, borderTopColor: '#f0f0f0',
+  },
+  emptyText: { color: '#888', fontSize: 14, textAlign: 'center' },
+  mealTypeBlock: { marginBottom: 14 },
   mealTypeTitle: {
-    fontSize: 13, fontWeight: '600', color: '#888',
-    marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5,
+    fontSize: 12, fontWeight: '700', color: '#005f99',
+    textTransform: 'uppercase', letterSpacing: 0.8,
+    marginBottom: 8,
   },
-  menuItem: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  itemImage: { width: 56, height: 56, borderRadius: 8, marginRight: 12 },
-  imagePlaceholder: {
-    width: 56, height: 56, borderRadius: 8,
-    backgroundColor: '#f0f0f0', alignItems: 'center',
-    justifyContent: 'center', marginRight: 12,
+  menuItem: {
+    flexDirection: 'row', alignItems: 'flex-start',
+    marginBottom: 8,
   },
-  imagePlaceholderText: { fontSize: 24 },
+  itemDot: {
+    width: 6, height: 6, borderRadius: 3,
+    backgroundColor: '#005f99', marginTop: 6, marginRight: 10,
+  },
   itemInfo: { flex: 1 },
   itemName: { fontSize: 15, fontWeight: '600', color: '#1a1a1a' },
   itemDesc: { fontSize: 13, color: '#888', marginTop: 2 },

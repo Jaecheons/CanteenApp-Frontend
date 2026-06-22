@@ -11,6 +11,7 @@ import api from '../services/api';
 const OUTLETS = ['Central Canteen', 'Administrative Building', 'Central Control Room', 'Central Workshop'];
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Evening Snacks', 'Dinner'];
 const MEAL_CATEGORIES = ['Veg', 'Paneer', 'Non-Veg'];
+const CATEGORY_MEAL_TYPES = ['Lunch', 'Dinner'];
 
 function formatDate(date) {
   return date.toISOString().split('T')[0];
@@ -40,6 +41,8 @@ export default function BookMealScreen({ navigation }) {
   const [nonVegCount, setNonVegCount] = useState('');
   const [loading, setLoading] = useState(false);
   const [specials, setSpecials] = useState([]);
+
+  const showCategorySection = CATEGORY_MEAL_TYPES.includes(mealType);
 
   useEffect(() => {
     api.get('/Specials/today')
@@ -72,16 +75,23 @@ export default function BookMealScreen({ navigation }) {
     if (!activeSpecial) setIsSpecialMeal(false);
   }, [mealType, outlet]);
 
+  // Reset meal category when switching to Breakfast/Evening Snacks
+  useEffect(() => {
+    if (!showCategorySection) setMealCategory(null);
+  }, [mealType]);
+
   const validate = () => {
     if (!fromDate || !toDate) return 'Please select both From and To dates.';
     if (fromDate > toDate) return 'From Date cannot be after To Date.';
     if (!outlet) return 'Please select a canteen outlet.';
     if (!mealType) return 'Please select a meal type.';
-    if (bookingFor === 'Self' && !isSpecialMeal && !mealCategory) return 'Please select a meal category.';
+    if (bookingFor === 'Self' && !isSpecialMeal && showCategorySection && !mealCategory) {
+      return 'Please select a meal category.';
+    }
     if (bookingFor === 'Guests') {
       const total = parseInt(guestCount) || 0;
       if (total < 1) return 'Please enter number of guests.';
-      if (!isSpecialMeal) {
+      if (!isSpecialMeal && showCategorySection) {
         const v = parseInt(vegCount) || 0;
         const p = parseInt(paneerCount) || 0;
         const n = parseInt(nonVegCount) || 0;
@@ -95,6 +105,23 @@ export default function BookMealScreen({ navigation }) {
     const error = validate();
     if (error) { Alert.alert('Validation Error', error); return; }
 
+    // For Breakfast and Evening Snacks default to vegCount = 1
+    const getSelfVeg = () => {
+      if (isSpecialMeal) return 0;
+      if (!showCategorySection) return 1;
+      return mealCategory === 'Veg' ? 1 : 0;
+    };
+    const getSelfPaneer = () => {
+      if (isSpecialMeal) return 0;
+      if (!showCategorySection) return 0;
+      return mealCategory === 'Paneer' ? 1 : 0;
+    };
+    const getSelfNonVeg = () => {
+      if (isSpecialMeal) return 0;
+      if (!showCategorySection) return 0;
+      return mealCategory === 'Non-Veg' ? 1 : 0;
+    };
+
     const payload = {
       fromDate,
       toDate,
@@ -102,9 +129,15 @@ export default function BookMealScreen({ navigation }) {
       mealType,
       bookingFor,
       guestCount: bookingFor === 'Guests' ? parseInt(guestCount) : null,
-      vegCount: isSpecialMeal ? 0 : (bookingFor === 'Guests' ? parseInt(vegCount) || 0 : (mealCategory === 'Veg' ? 1 : 0)),
-      paneerCount: isSpecialMeal ? 0 : (bookingFor === 'Guests' ? parseInt(paneerCount) || 0 : (mealCategory === 'Paneer' ? 1 : 0)),
-      nonVegCount: isSpecialMeal ? 0 : (bookingFor === 'Guests' ? parseInt(nonVegCount) || 0 : (mealCategory === 'Non-Veg' ? 1 : 0)),
+      vegCount: bookingFor === 'Guests'
+        ? (isSpecialMeal || !showCategorySection ? 0 : parseInt(vegCount) || 0)
+        : getSelfVeg(),
+      paneerCount: bookingFor === 'Guests'
+        ? (isSpecialMeal || !showCategorySection ? 0 : parseInt(paneerCount) || 0)
+        : getSelfPaneer(),
+      nonVegCount: bookingFor === 'Guests'
+        ? (isSpecialMeal || !showCategorySection ? 0 : parseInt(nonVegCount) || 0)
+        : getSelfNonVeg(),
       isSpecialMeal,
     };
 
@@ -198,7 +231,11 @@ export default function BookMealScreen({ navigation }) {
           <TouchableOpacity
             key={m}
             style={[styles.optionBtn, mealType === m && styles.optionBtnSelected]}
-            onPress={() => { setMealType(m); setMealCategory(null); setIsSpecialMeal(false); }}
+            onPress={() => {
+              setMealType(m);
+              setMealCategory(null);
+              setIsSpecialMeal(false);
+            }}
           >
             <Text style={[styles.optionText, mealType === m && styles.optionTextSelected]}>{m}</Text>
           </TouchableOpacity>
@@ -251,8 +288,8 @@ export default function BookMealScreen({ navigation }) {
         </View>
       )}
 
-      {/* Meal Category — only for regular meal, Self */}
-      {!isSpecialMeal && bookingFor === 'Self' && (
+      {/* Meal Category — only for Lunch and Dinner, Self, regular meal */}
+      {!isSpecialMeal && bookingFor === 'Self' && showCategorySection && (
         <>
           <Text style={styles.label}>Meal Category</Text>
           <View style={styles.buttonRow}>
@@ -280,7 +317,8 @@ export default function BookMealScreen({ navigation }) {
             keyboardType="numeric"
             placeholder="e.g. 3"
           />
-          {!isSpecialMeal && (
+          {/* Veg/Paneer/Non-Veg only for Lunch and Dinner */}
+          {!isSpecialMeal && showCategorySection && (
             <>
               <Text style={styles.label}>Veg Count</Text>
               <TextInput

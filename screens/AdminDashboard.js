@@ -20,6 +20,8 @@ export default function AdminDashboard({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
+  const todayStr = new Date().toISOString().split('T')[0];
+
   const fetchData = async () => {
     try {
       console.log('FETCHING: /Bookings /Specials');
@@ -79,8 +81,20 @@ export default function AdminDashboard({ navigation }) {
     );
   }
 
-  const confirmed = bookings.filter(b => b.status?.toLowerCase() === 'confirmed').length;
-  const cancelled = bookings.filter(b => b.status?.toLowerCase() === 'cancelled').length;
+  // Filter bookings for today only for stats
+  const todayBookings = bookings.filter(
+    (b) =>
+      b.fromDate?.split('T')[0] <= todayStr &&
+      b.toDate?.split('T')[0] >= todayStr
+  );
+
+  const confirmed = todayBookings.filter(
+    (b) => b.status?.toLowerCase() === 'confirmed'
+  ).length;
+
+  const cancelled = todayBookings.filter(
+    (b) => b.status?.toLowerCase() === 'cancelled'
+  ).length;
 
   const sections = [
     { title: 'header', data: ['header'] },
@@ -101,10 +115,14 @@ export default function AdminDashboard({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* Stats */}
+          {/* Today's date */}
+          <Text style={styles.dateLabel}>📅 Today: {todayStr}</Text>
+
+          {/* Stats — today only */}
+          <Text style={styles.statsHeading}>Today's Bookings</Text>
           <View style={styles.statsRow}>
             <View style={styles.statCard}>
-              <Text style={styles.statNumber}>{bookings.length}</Text>
+              <Text style={styles.statNumber}>{todayBookings.length}</Text>
               <Text style={styles.statLabel}>Total</Text>
             </View>
             <View style={styles.statCard}>
@@ -185,7 +203,7 @@ export default function AdminDashboard({ navigation }) {
           </View>
         </View>
         <Text style={styles.employeeName}>
-          {item.employeeName ?? 'Employee'}
+          {item.employeeName || `Employee #${item.employeeID}`}
         </Text>
         <Text style={styles.mealType}>
           {item.isSpecialMeal ? '🌟 ' : ''}{item.mealType}
@@ -230,10 +248,15 @@ const styles = StyleSheet.create({
   errorText: { color: '#c0392b', fontSize: 15, textAlign: 'center', marginBottom: 16 },
   header: {
     flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginTop: 50, marginBottom: 20,
+    alignItems: 'center', marginTop: 50, marginBottom: 8,
   },
   heading: { fontSize: 22, fontWeight: 'bold', color: '#1a1a1a' },
   logout: { fontSize: 14, color: '#005f99', fontWeight: '600' },
+  dateLabel: { fontSize: 13, color: '#888', marginBottom: 12 },
+  statsHeading: {
+    fontSize: 13, fontWeight: 'bold', color: '#888',
+    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8,
+  },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   statCard: {
     flex: 1, backgroundColor: '#fff', borderRadius: 10,
@@ -252,7 +275,7 @@ const styles = StyleSheet.create({
   },
   menuBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
   outletBtn: {
-    backgroundColor: '#ff0303', padding: 14,
+    backgroundColor: '#8e44ad', padding: 14,
     borderRadius: 10, alignItems: 'center', marginBottom: 20,
   },
   outletBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },

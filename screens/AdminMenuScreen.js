@@ -19,7 +19,6 @@ export default function AdminMenuScreen({ navigation }) {
   const [previewing, setPreviewing] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
-  // Add item form state
   const [showAddForm, setShowAddForm] = useState(false);
   const [addDay, setAddDay] = useState(DAYS[0]);
   const [addMealType, setAddMealType] = useState(MEAL_TYPES[0]);
@@ -34,10 +33,11 @@ export default function AdminMenuScreen({ navigation }) {
   const fetchMenu = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/menu');
+      const response = await api.get('/Menu');
       setMenu(response.data ?? []);
       setError(null);
     } catch (err) {
+      console.log('MENU LOAD ERROR:', err.response?.status);
       setError('Failed to load menu.');
     } finally {
       setLoading(false);
@@ -46,7 +46,6 @@ export default function AdminMenuScreen({ navigation }) {
 
   const addChange = (change) => {
     setChanges((prev) => {
-      // Replace if same menuItemID already in changes
       if (change.menuItemID) {
         const exists = prev.find(
           (c) => c.menuItemID === change.menuItemID && c.action === change.action
@@ -68,22 +67,26 @@ export default function AdminMenuScreen({ navigation }) {
       Alert.alert('Error', 'Please enter an item name.');
       return;
     }
+
+    // Description is optional — send empty string if not provided
     addChange({
       action: 'Add',
       newItem: {
         dayOfWeek: addDay,
         mealType: addMealType,
         itemName: addItemName.trim(),
-        description: addDescription.trim() || null,
+        description: addDescription.trim() || '',
         photoUrl: null,
         displayOrder: parseInt(addDisplayOrder) || 99,
       },
     });
+
+    const addedName = addItemName.trim();
     setAddItemName('');
     setAddDescription('');
     setAddDisplayOrder('');
     setShowAddForm(false);
-    Alert.alert('Added', `"${addItemName}" added to changes. Preview to confirm.`);
+    Alert.alert('Added ✅', `"${addedName}" added to pending changes. Tap Preview to confirm.`);
   };
 
   const handleDeleteItem = (item) => {
@@ -96,7 +99,7 @@ export default function AdminMenuScreen({ navigation }) {
           text: 'Delete', style: 'destructive',
           onPress: () => {
             addChange({ action: 'Delete', menuItemID: item.menuItemID });
-            Alert.alert('Marked', `"${item.itemName}" marked for deletion. Preview to confirm.`);
+            Alert.alert('Marked 🗑', `"${item.itemName}" marked for deletion. Tap Preview to confirm.`);
           }
         },
       ]
@@ -110,11 +113,13 @@ export default function AdminMenuScreen({ navigation }) {
     }
     try {
       setPreviewing(true);
+      console.log('PREVIEW PAYLOAD:', JSON.stringify({ changes }));
       const response = await api.post('/menu/admin/preview', { changes });
       setPreview(response.data.preview ?? []);
       setConfirmationToken(response.data.confirmationToken);
     } catch (err) {
-      Alert.alert('Error', err.response?.data?.message ?? 'Preview failed.');
+      console.log('PREVIEW ERROR:', err.response?.status, JSON.stringify(err.response?.data));
+      Alert.alert('Error', err.response?.data?.message ?? 'Preview failed. Please try again.');
     } finally {
       setPreviewing(false);
     }
@@ -138,6 +143,7 @@ export default function AdminMenuScreen({ navigation }) {
         }
       ]);
     } catch (err) {
+      console.log('CONFIRM ERROR:', err.response?.status, JSON.stringify(err.response?.data));
       Alert.alert('Error', err.response?.data?.message ?? 'Could not apply changes.');
     } finally {
       setConfirming(false);
@@ -177,7 +183,7 @@ export default function AdminMenuScreen({ navigation }) {
               <Text style={styles.changeText}>
                 {c.action === 'Add'
                   ? `➕ Add "${c.newItem?.itemName}" to ${c.newItem?.dayOfWeek} ${c.newItem?.mealType}`
-                  : `✕ Delete item #${c.menuItemID}`}
+                  : `🗑 Delete item #${c.menuItemID}`}
               </Text>
               <TouchableOpacity onPress={() => removeChange(index)}>
                 <Text style={styles.removeChange}>✕</Text>
@@ -208,8 +214,8 @@ export default function AdminMenuScreen({ navigation }) {
               <Text style={styles.previewDetail}>
                 {p.dayOfWeek} · {p.mealType}
               </Text>
-              {p.oldValue && <Text style={styles.previewOld}>Was: {p.oldValue}</Text>}
-              {p.newValue && <Text style={styles.previewNew}>Now: {p.newValue}</Text>}
+              {p.oldValue ? <Text style={styles.previewOld}>Was: {p.oldValue}</Text> : null}
+              {p.newValue ? <Text style={styles.previewNew}>Now: {p.newValue}</Text> : null}
             </View>
           ))}
 
@@ -233,7 +239,7 @@ export default function AdminMenuScreen({ navigation }) {
         </View>
       )}
 
-      {/* Add Item Form */}
+      {/* Add Item Button */}
       <TouchableOpacity
         style={styles.addBtn}
         onPress={() => setShowAddForm(!showAddForm)}
@@ -243,6 +249,7 @@ export default function AdminMenuScreen({ navigation }) {
         </Text>
       </TouchableOpacity>
 
+      {/* Add Item Form */}
       {showAddForm && (
         <View style={styles.card}>
           <Text style={styles.formTitle}>New Menu Item</Text>
@@ -283,21 +290,25 @@ export default function AdminMenuScreen({ navigation }) {
             placeholder="e.g. Idli"
           />
 
-          <Text style={styles.fieldLabel}>Description (optional)</Text>
+          <Text style={styles.fieldLabel}>Description
+            <Text style={styles.optionalTag}> (optional)</Text>
+          </Text>
           <TextInput
             style={styles.input}
             value={addDescription}
             onChangeText={setAddDescription}
-            placeholder="Brief description"
+            placeholder="Brief description (optional)"
           />
 
-          <Text style={styles.fieldLabel}>Display Order (optional)</Text>
+          <Text style={styles.fieldLabel}>Display Order
+            <Text style={styles.optionalTag}> (optional)</Text>
+          </Text>
           <TextInput
             style={styles.input}
             value={addDisplayOrder}
             onChangeText={setAddDisplayOrder}
             keyboardType="numeric"
-            placeholder="e.g. 5"
+            placeholder="e.g. 5 (leave blank for default)"
           />
 
           <TouchableOpacity style={styles.submitBtn} onPress={handleAddItem}>
@@ -326,7 +337,7 @@ export default function AdminMenuScreen({ navigation }) {
                     style={styles.deleteItemBtn}
                     onPress={() => handleDeleteItem(item)}
                   >
-                    <Text style={styles.deleteItemText}>✕</Text>
+                    <Text style={styles.deleteItemText}>🗑</Text>
                   </TouchableOpacity>
                 </View>
               ))}
@@ -347,7 +358,8 @@ const styles = StyleSheet.create({
   heading: { fontSize: 22, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 20 },
   changesBox: {
     backgroundColor: '#e8f4fd', borderRadius: 12,
-    padding: 16, marginBottom: 16, borderLeftWidth: 4, borderLeftColor: '#005f99',
+    padding: 16, marginBottom: 16,
+    borderLeftWidth: 4, borderLeftColor: '#005f99',
   },
   changesTitle: { fontSize: 15, fontWeight: 'bold', color: '#005f99', marginBottom: 10 },
   changeRow: {
@@ -395,6 +407,7 @@ const styles = StyleSheet.create({
   },
   formTitle: { fontSize: 16, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 12 },
   fieldLabel: { fontSize: 13, fontWeight: '600', color: '#333', marginTop: 12, marginBottom: 6 },
+  optionalTag: { fontSize: 12, color: '#aaa', fontWeight: '400' },
   buttonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   optionBtn: {
     paddingVertical: 8, paddingHorizontal: 14,

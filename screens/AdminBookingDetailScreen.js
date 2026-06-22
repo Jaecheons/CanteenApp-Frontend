@@ -116,9 +116,22 @@ export default function BookingDetailScreen({ route, navigation }) {
         </View>
       </View>
 
-      {/* Read-only details */}
+      {/* Employee Info */}
+      <Text style={styles.sectionLabel}>Employee Details</Text>
       <View style={styles.card}>
-        <Row label="Meal Type" value={booking.isSpecialMeal ? `🌟 ${booking.mealType} (Special)` : booking.mealType} />
+        <Row label="Employee ID" value={String(booking.employeeID ?? '—')} />
+        <Row label="Employee Name" value={booking.employeeName || '—'} />
+      </View>
+
+      {/* Booking Info */}
+      <Text style={styles.sectionLabel}>Booking Details</Text>
+      <View style={styles.card}>
+        <Row
+          label="Meal Type"
+          value={booking.isSpecialMeal
+            ? `🌟 ${booking.mealType} (Special)`
+            : booking.mealType}
+        />
         <Row label="From Date" value={booking.fromDate?.split('T')[0]} />
         <Row label="To Date" value={booking.toDate?.split('T')[0]} />
         <Row label="Outlet" value={booking.canteenLocation} />
@@ -236,6 +249,11 @@ const styles = StyleSheet.create({
   heading: { fontSize: 20, fontWeight: 'bold', color: '#1a1a1a' },
   statusBadge: { paddingVertical: 4, paddingHorizontal: 12, borderRadius: 20 },
   statusText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  sectionLabel: {
+    fontSize: 13, fontWeight: 'bold', color: '#888',
+    textTransform: 'uppercase', letterSpacing: 0.5,
+    marginBottom: 8, marginTop: 4,
+  },
   card: {
     backgroundColor: '#fff', borderRadius: 12,
     padding: 16, elevation: 2, marginBottom: 16,
