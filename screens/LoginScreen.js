@@ -9,13 +9,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
 
 export default function LoginScreen({ navigation }) {
-  const [employeeId, setEmployeeId] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    if (!employeeId || !password) {
-      Alert.alert('Error', 'Please enter both Employee ID and Password.');
+    if (!username || !password) {
+      Alert.alert('Error', 'Please enter both Username and Password.');
       return;
     }
 
@@ -23,12 +23,12 @@ export default function LoginScreen({ navigation }) {
       setLoading(true);
 
       console.log('SENDING:', {
-        employeeID: parseInt(employeeId),
+        username: username,
         password: password,
       });
 
       const response = await api.post('/Auth/login', {
-        employeeID: parseInt(employeeId),
+        username: username,
         password: password,
       });
 
@@ -85,13 +85,12 @@ export default function LoginScreen({ navigation }) {
           <Text style={styles.heading}>Welcome</Text>
           <Text style={styles.subheading}>Sign in to continue</Text>
 
-          <Text style={styles.label}>Employee ID</Text>
+          <Text style={styles.label}>Username</Text>
           <TextInput
             style={styles.input}
-            value={employeeId}
-            onChangeText={setEmployeeId}
-            keyboardType="numeric"
-            placeholder="Enter your Employee ID"
+            value={username}
+            onChangeText={setUsername}
+            placeholder="Enter your Username"
             placeholderTextColor="#383838"
           />
 
