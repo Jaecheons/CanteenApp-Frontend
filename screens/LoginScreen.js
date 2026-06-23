@@ -92,7 +92,7 @@ export default function LoginScreen({ navigation }) {
             onChangeText={setEmployeeId}
             keyboardType="numeric"
             placeholder="Enter your Employee ID"
-            placeholderTextColor="#aaa"
+            placeholderTextColor="#383838"
           />
 
           <Text style={styles.label}>Password</Text>
@@ -102,7 +102,7 @@ export default function LoginScreen({ navigation }) {
             onChangeText={setPassword}
             secureTextEntry
             placeholder="Enter your Password"
-            placeholderTextColor="#aaa"
+            placeholderTextColor="#383838"
           />
 
           <TouchableOpacity
@@ -139,10 +139,6 @@ const styles = StyleSheet.create({
     padding: 25,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
   },
   heading: {
     fontSize: 28,

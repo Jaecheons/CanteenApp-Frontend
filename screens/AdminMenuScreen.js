@@ -99,7 +99,7 @@ export default function AdminMenuScreen({ navigation }) {
           text: 'Delete', style: 'destructive',
           onPress: () => {
             addChange({ action: 'Delete', menuItemID: item.menuItemID });
-            Alert.alert('Marked 🗑', `"${item.itemName}" marked for deletion. Tap Preview to confirm.`);
+            Alert.alert('Marked ✖', `"${item.itemName}" marked for deletion. Tap Preview to confirm.`);
           }
         },
       ]
@@ -183,7 +183,7 @@ export default function AdminMenuScreen({ navigation }) {
               <Text style={styles.changeText}>
                 {c.action === 'Add'
                   ? `➕ Add "${c.newItem?.itemName}" to ${c.newItem?.dayOfWeek} ${c.newItem?.mealType}`
-                  : `🗑 Delete item #${c.menuItemID}`}
+                  : `✖ Delete item #${c.menuItemID}`}
               </Text>
               <TouchableOpacity onPress={() => removeChange(index)}>
                 <Text style={styles.removeChange}>✕</Text>
@@ -337,7 +337,7 @@ export default function AdminMenuScreen({ navigation }) {
                     style={styles.deleteItemBtn}
                     onPress={() => handleDeleteItem(item)}
                   >
-                    <Text style={styles.deleteItemText}>🗑</Text>
+                    <Text style={styles.deleteItemText}>✖</Text>
                   </TouchableOpacity>
                 </View>
               ))}

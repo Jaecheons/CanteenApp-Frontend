@@ -14,6 +14,12 @@ export default function HomeScreen({ navigation }) {
   const [todayMenu, setTodayMenu] = useState({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const MEAL_ORDER = [
+    'Breakfast',
+    'Lunch',
+    'Evening Snacks',
+    'Dinner',
+  ];
 
   const getDayName = () => {
     return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
@@ -152,20 +158,24 @@ export default function HomeScreen({ navigation }) {
       </TouchableOpacity>
 
       {/* Today's Menu Preview */}
+
       {Object.keys(todayMenu).length > 0 && (
         <>
           <Text style={styles.sectionTitle}>Today's Menu</Text>
           <View style={styles.menuCard}>
-            {Object.entries(todayMenu).map(([mealType, items]) => (
-              <View key={mealType} style={styles.mealTypeBlock}>
-                <Text style={styles.mealTypeTitle}>{mealType}</Text>
-                {items.map((item, index) => (
-                  <Text key={index} style={styles.menuItem}>
-                    · {item.itemName}
-                  </Text>
-                ))}
-              </View>
-            ))}
+            {Object.entries(todayMenu)
+              .sort(([a], [b]) => MEAL_ORDER.indexOf(a) - MEAL_ORDER.indexOf(b))
+            
+              .map(([mealType, items]) => (
+                <View key={mealType} style={styles.mealTypeBlock}>
+                  <Text style={styles.mealTypeTitle}>{mealType}</Text>
+                  {items.map((item, index) => (
+                    <Text key={index} style={styles.menuItem}>
+                      · {item.itemName}
+                    </Text>
+                  ))}
+                </View>
+              ))}
           </View>
         </>
       )}
