@@ -6,7 +6,7 @@ import {
 } from 'react-native';
 import api from '../services/api';
 
-const OUTLETS = ['Outlet 1', 'Outlet 2', 'Outlet 3', 'Outlet 4'];
+const OUTLETS = ['Central Canteen', 'Administrative Building', 'Central Control Room', 'Central Workshop'];
 const MEAL_CATEGORIES = ['Veg', 'Paneer', 'Non-Veg'];
 
 const STATUS_COLORS = {
