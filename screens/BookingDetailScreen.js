@@ -5,6 +5,7 @@ import {
   TouchableOpacity, Alert, ActivityIndicator, TextInput
 } from 'react-native';
 import api from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const OUTLETS = ['Central Canteen', 'Administrative Building', 'Central Control Room', 'Central Workshop'];
 const MEAL_CATEGORIES = ['Veg', 'Paneer', 'Non-Veg'];
@@ -30,6 +31,14 @@ export default function BookingDetailScreen({ route, navigation }) {
   const [vegCount, setVegCount] = useState(String(booking.vegCount ?? 0));
   const [paneerCount, setPaneerCount] = useState(String(booking.paneerCount ?? 0));
   const [nonVegCount, setNonVegCount] = useState(String(booking.nonVegCount ?? 0));
+
+  const [loggedInName, setLoggedInName] = useState('');
+
+  useEffect(() => {
+    AsyncStorage.getItem('name').then((n) => {
+      if (n) setLoggedInName(n);
+    });
+  }, []);
 
   const bookingId = booking.bookingID;
   const status = booking.status?.toLowerCase() ?? 'confirmed';
@@ -140,7 +149,7 @@ export default function BookingDetailScreen({ route, navigation }) {
       <Text style={styles.sectionLabel}>Employee Details</Text>
       <View style={styles.card}>
         <Row label="Employee ID" value={String(booking.employeeID ?? '—')} />
-        <Row label="Employee Name" value={booking.employeeName || '—'} />
+        <Row label="Employee Name" value={booking.employeeName || loggedInName || '—'} />
       </View>
 
       {/* Booking Details */}
