@@ -36,7 +36,7 @@ export default function SplashScreen({ navigation }) {
         style={styles.logo}
         resizeMode="contain"
       />
-      <Text style={styles.title}>XYZ Canteen</Text>
+      <Text style={styles.title}>Canteen App</Text>
       <Text style={styles.subtitle}>Meal Booking App</Text>
     </View>
   );
