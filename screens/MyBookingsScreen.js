@@ -20,8 +20,9 @@ export default function MyBookingsScreen({ navigation }) {
 
   const fetchBookings = async () => {
     try {
-      const response = await api.get('/bookings/my');
-      setBookings(response.data);
+      const response = await api.get('/Bookings/my');
+      const sorted = (response.data ?? []).sort((a, b) => b.bookingID - a.bookingID);
+      setBookings(sorted);
       setError(null);
     } catch (err) {
       console.log('MY BOOKINGS ERROR:', err.response?.status, err.response?.data);
@@ -107,7 +108,6 @@ export default function MyBookingsScreen({ navigation }) {
             : '👤 Self'}
         </Text>
 
-        {/* Show edit/cancel hint only if modifiable */}
         {item.canModify && (
           <Text style={styles.modifyHint}>Tap to edit or cancel</Text>
         )}

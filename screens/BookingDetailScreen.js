@@ -8,6 +8,7 @@ import api from '../services/api';
 
 const OUTLETS = ['Central Canteen', 'Administrative Building', 'Central Control Room', 'Central Workshop'];
 const MEAL_CATEGORIES = ['Veg', 'Paneer', 'Non-Veg'];
+const CATEGORY_MEAL_TYPES = ['Lunch', 'Dinner'];
 
 const STATUS_COLORS = {
   confirmed: '#27ae60',
@@ -21,7 +22,6 @@ export default function BookingDetailScreen({ route, navigation }) {
   const [saving, setSaving] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
-  // Editable fields
   const [outlet, setOutlet] = useState(booking.canteenLocation);
   const [mealCategory, setMealCategory] = useState(
     booking.vegCount > 0 ? 'Veg' : booking.paneerCount > 0 ? 'Paneer' : 'Non-Veg'
@@ -35,37 +35,54 @@ export default function BookingDetailScreen({ route, navigation }) {
   const status = booking.status?.toLowerCase() ?? 'confirmed';
   const statusColor = STATUS_COLORS[status] ?? '#888';
 
+  // Only show category for Lunch and Dinner
+  const showCategorySection = CATEGORY_MEAL_TYPES.includes(booking.mealType);
+
   const handleSave = async () => {
-    const payload = {
-      canteenLocation: outlet,
-    };
+    const payload = { canteenLocation: outlet };
 
     if (booking.bookingFor === 'Self' && !booking.isSpecialMeal) {
-      payload.vegCount = mealCategory === 'Veg' ? 1 : 0;
-      payload.paneerCount = mealCategory === 'Paneer' ? 1 : 0;
-      payload.nonVegCount = mealCategory === 'Non-Veg' ? 1 : 0;
+      if (showCategorySection) {
+        payload.vegCount = mealCategory === 'Veg' ? 1 : 0;
+        payload.paneerCount = mealCategory === 'Paneer' ? 1 : 0;
+        payload.nonVegCount = mealCategory === 'Non-Veg' ? 1 : 0;
+      } else {
+        // Breakfast / Evening Snacks — default to veg
+        payload.vegCount = 1;
+        payload.paneerCount = 0;
+        payload.nonVegCount = 0;
+      }
     }
 
     if (booking.bookingFor === 'Guests') {
       const total = parseInt(guestCount) || 0;
-      const v = parseInt(vegCount) || 0;
-      const p = parseInt(paneerCount) || 0;
-      const n = parseInt(nonVegCount) || 0;
 
-      if (v + p + n !== total) {
-        Alert.alert('Validation Error', 'Veg + Paneer + Non-Veg must equal total guest count.');
-        return;
+      if (showCategorySection) {
+        const v = parseInt(vegCount) || 0;
+        const p = parseInt(paneerCount) || 0;
+        const n = parseInt(nonVegCount) || 0;
+
+        if (v + p + n !== total) {
+          Alert.alert('Validation Error', 'Veg + Paneer + Non-Veg must equal total guest count.');
+          return;
+        }
+
+        payload.guestCount = total;
+        payload.vegCount = v;
+        payload.paneerCount = p;
+        payload.nonVegCount = n;
+      } else {
+        // Breakfast / Evening Snacks — just send total
+        payload.guestCount = total;
+        payload.vegCount = 0;
+        payload.paneerCount = 0;
+        payload.nonVegCount = 0;
       }
-
-      payload.guestCount = total;
-      payload.vegCount = v;
-      payload.paneerCount = p;
-      payload.nonVegCount = n;
     }
 
     try {
       setSaving(true);
-      await api.put(`/bookings/${bookingId}`, payload);
+      await api.put(`/Bookings/${bookingId}`, payload);
       Alert.alert('Updated!', 'Your booking has been updated.', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
@@ -90,7 +107,7 @@ export default function BookingDetailScreen({ route, navigation }) {
   const confirmCancel = async () => {
     try {
       setCancelling(true);
-      await api.delete(`/bookings/${bookingId}`);
+      await api.delete(`/Bookings/${bookingId}`);
       Alert.alert('Cancelled', 'Your booking has been cancelled.', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
@@ -119,11 +136,25 @@ export default function BookingDetailScreen({ route, navigation }) {
         </View>
       </View>
 
-      {/* Read-only details */}
+      {/* Employee Details */}
+      <Text style={styles.sectionLabel}>Employee Details</Text>
       <View style={styles.card}>
-        <Row label="Meal Type" value={booking.isSpecialMeal ? `🌟 ${booking.mealType} (Special)` : booking.mealType} />
+        <Row label="Employee ID" value={String(booking.employeeID ?? '—')} />
+        <Row label="Employee Name" value={booking.employeeName || '—'} />
+      </View>
+
+      {/* Booking Details */}
+      <Text style={styles.sectionLabel}>Booking Details</Text>
+      <View style={styles.card}>
+        <Row
+          label="Meal Type"
+          value={booking.isSpecialMeal
+            ? `🌟 ${booking.mealType} (Special)`
+            : booking.mealType}
+        />
         <Row label="From Date" value={booking.fromDate?.split('T')[0]} />
         <Row label="To Date" value={booking.toDate?.split('T')[0]} />
+        <Row label="Outlet" value={booking.canteenLocation} />
         <Row label="Booked For" value={booking.bookingFor} />
         {booking.bookingFor === 'Guests' && (
           <Row label="Total Guests" value={String(booking.guestCount)} />
@@ -157,8 +188,8 @@ export default function BookingDetailScreen({ route, navigation }) {
                 ))}
               </View>
 
-              {/* Meal Category — Self only, not special */}
-              {booking.bookingFor === 'Self' && !booking.isSpecialMeal && (
+              {/* Meal Category — Self, not special, Lunch/Dinner only */}
+              {booking.bookingFor === 'Self' && !booking.isSpecialMeal && showCategorySection && (
                 <>
                   <Text style={styles.fieldLabel}>Meal Category</Text>
                   <View style={styles.buttonRow}>
@@ -179,13 +210,24 @@ export default function BookingDetailScreen({ route, navigation }) {
               {booking.bookingFor === 'Guests' && (
                 <>
                   <Text style={styles.fieldLabel}>Total Persons</Text>
-                  <TextInput style={styles.input} value={guestCount} onChangeText={setGuestCount} keyboardType="numeric" />
-                  <Text style={styles.fieldLabel}>Veg Count</Text>
-                  <TextInput style={styles.input} value={vegCount} onChangeText={setVegCount} keyboardType="numeric" />
-                  <Text style={styles.fieldLabel}>Paneer Count</Text>
-                  <TextInput style={styles.input} value={paneerCount} onChangeText={setPaneerCount} keyboardType="numeric" />
-                  <Text style={styles.fieldLabel}>Non-Veg Count</Text>
-                  <TextInput style={styles.input} value={nonVegCount} onChangeText={setNonVegCount} keyboardType="numeric" />
+                  <TextInput
+                    style={styles.input}
+                    value={guestCount}
+                    onChangeText={setGuestCount}
+                    keyboardType="numeric"
+                  />
+
+                  {/* Veg/Paneer/Non-Veg only for Lunch and Dinner */}
+                  {showCategorySection && (
+                    <>
+                      <Text style={styles.fieldLabel}>Veg Count</Text>
+                      <TextInput style={styles.input} value={vegCount} onChangeText={setVegCount} keyboardType="numeric" />
+                      <Text style={styles.fieldLabel}>Paneer Count</Text>
+                      <TextInput style={styles.input} value={paneerCount} onChangeText={setPaneerCount} keyboardType="numeric" />
+                      <Text style={styles.fieldLabel}>Non-Veg Count</Text>
+                      <TextInput style={styles.input} value={nonVegCount} onChangeText={setNonVegCount} keyboardType="numeric" />
+                    </>
+                  )}
                 </>
               )}
 
@@ -224,7 +266,6 @@ export default function BookingDetailScreen({ route, navigation }) {
             : 'This booking can no longer be modified.'}
         </Text>
       )}
-
     </ScrollView>
   );
 }
@@ -239,6 +280,11 @@ const styles = StyleSheet.create({
   heading: { fontSize: 20, fontWeight: 'bold', color: '#1a1a1a' },
   statusBadge: { paddingVertical: 4, paddingHorizontal: 12, borderRadius: 20 },
   statusText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  sectionLabel: {
+    fontSize: 13, fontWeight: 'bold', color: '#888',
+    textTransform: 'uppercase', letterSpacing: 0.5,
+    marginBottom: 8, marginTop: 4,
+  },
   card: {
     backgroundColor: '#fff', borderRadius: 12,
     padding: 16, elevation: 2, marginBottom: 16,
