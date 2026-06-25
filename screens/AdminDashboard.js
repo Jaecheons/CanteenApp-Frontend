@@ -2,7 +2,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, SectionList,
-  TouchableOpacity, ActivityIndicator, RefreshControl
+  TouchableOpacity, ActivityIndicator, RefreshControl, TextInput
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -13,30 +13,30 @@ const STATUS_COLORS = {
   cancelled: '#c0392b',
 };
 
+const OUTLETS = ['Central Canteen', 'Administrative Building', 'Central Control Room', 'Central Workshop'];
+const MEAL_TYPES = ['Breakfast', 'Lunch', 'Evening Snacks', 'Dinner'];
+
 export default function AdminDashboard({ navigation }) {
   const [bookings, setBookings] = useState([]);
   const [specials, setSpecials] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const todayStr = new Date().toISOString().split('T')[0];
 
   const fetchData = async () => {
     try {
-      console.log('FETCHING: /Bookings /Specials');
       const [bookingsRes, specialsRes] = await Promise.all([
         api.get('/Bookings'),
         api.get('/Specials'),
       ]);
-      console.log('BOOKINGS DATA:', JSON.stringify(bookingsRes.data));
-      console.log('SPECIALS DATA:', JSON.stringify(specialsRes.data));
       setBookings(bookingsRes.data ?? []);
       setSpecials(specialsRes.data ?? []);
       setError(null);
     } catch (err) {
       console.log('ADMIN ERROR:', err.response?.status, err.response?.data);
-      console.log('ADMIN ERROR URL:', err.config?.baseURL + err.config?.url);
       setError('Failed to load data. Please try again.');
     } finally {
       setLoading(false);
@@ -81,7 +81,7 @@ export default function AdminDashboard({ navigation }) {
     );
   }
 
-  // Filter bookings for today only for stats
+  // Today's bookings
   const todayBookings = bookings.filter(
     (b) =>
       b.fromDate?.split('T')[0] <= todayStr &&
@@ -96,18 +96,49 @@ export default function AdminDashboard({ navigation }) {
     (b) => b.status?.toLowerCase() === 'cancelled'
   ).length;
 
+  // Meal wise counts for today
+  const mealWiseCounts = MEAL_TYPES.map((meal) => ({
+    meal,
+    count: todayBookings.filter(
+      (b) => b.mealType === meal && b.status?.toLowerCase() === 'confirmed'
+    ).length,
+  })).filter((m) => m.count > 0);
+
+  // Per outlet per meal counts
+  const outletMealMatrix = OUTLETS.map((outlet) => ({
+    outlet,
+    meals: MEAL_TYPES.map((meal) => ({
+      meal,
+      count: todayBookings.filter(
+        (b) =>
+          b.canteenLocation === outlet &&
+          b.mealType === meal &&
+          b.status?.toLowerCase() === 'confirmed'
+      ).length,
+    })).filter((m) => m.count > 0),
+  })).filter((o) => o.meals.length > 0);
+
+  // Filter bookings by search query
+  const filteredBookings = bookings.filter((b) => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    const name = (b.employeeName ?? '').toLowerCase();
+    const id = String(b.employeeID ?? '');
+    return name.includes(query) || id.includes(query);
+  });
+
   const sections = [
     { title: 'header', data: ['header'] },
     { title: 'Specials', data: specials.length > 0 ? specials : ['empty_specials'] },
-    { title: 'All Bookings', data: bookings.length > 0 ? bookings : ['empty_bookings'] },
+    { title: 'All Bookings', data: filteredBookings.length > 0 ? filteredBookings : ['empty_bookings'] },
   ];
 
   const renderItem = ({ item, section }) => {
 
-    // Header section
     if (section.title === 'header') {
       return (
         <View>
+          {/* Header */}
           <View style={styles.header}>
             <Text style={styles.heading}>Admin Dashboard</Text>
             <TouchableOpacity onPress={handleLogout}>
@@ -115,11 +146,10 @@ export default function AdminDashboard({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* Today's date */}
           <Text style={styles.dateLabel}>📅 Today: {todayStr}</Text>
 
-          {/* Stats — today only */}
-          <Text style={styles.statsHeading}>Today's Bookings</Text>
+          {/* Stats */}
+          <Text style={styles.sectionLabel}>Today's Bookings</Text>
           <View style={styles.statsRow}>
             <View style={styles.statCard}>
               <Text style={styles.statNumber}>{todayBookings.length}</Text>
@@ -134,6 +164,41 @@ export default function AdminDashboard({ navigation }) {
               <Text style={styles.statLabel}>Cancelled</Text>
             </View>
           </View>
+
+          {/* Meal Wise Counts */}
+          {mealWiseCounts.length > 0 && (
+            <View style={styles.breakdownBox}>
+              <Text style={styles.sectionLabel}>Today's Meal Breakdown</Text>
+              <View style={styles.mealWiseRow}>
+                {mealWiseCounts.map((m) => (
+                  <View key={m.meal} style={styles.mealWiseCard}>
+                    <Text style={styles.mealWiseCount}>{m.count}</Text>
+                    <Text style={styles.mealWiseLabel}>{m.meal}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Per Outlet Per Meal */}
+          {outletMealMatrix.length > 0 && (
+            <View style={styles.breakdownBox}>
+              <Text style={styles.sectionLabel}>Per Outlet Breakdown</Text>
+              {outletMealMatrix.map((o) => (
+                <View key={o.outlet} style={styles.outletRow}>
+                  <Text style={styles.outletName}>{o.outlet}</Text>
+                  <View style={styles.outletMealsRow}>
+                    {o.meals.map((m) => (
+                      <View key={m.meal} style={styles.outletMealBadge}>
+                        <Text style={styles.outletMealCount}>{m.count}</Text>
+                        <Text style={styles.outletMealLabel}>{m.meal}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
 
           {/* Action Buttons */}
           <TouchableOpacity
@@ -156,19 +221,47 @@ export default function AdminDashboard({ navigation }) {
           >
             <Text style={styles.outletBtnText}>📍 View by Outlet</Text>
           </TouchableOpacity>
+
+          {/* Search Bar */}
+          <Text style={styles.sectionLabel}>Search Bookings</Text>
+          <View style={styles.searchBox}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchInput}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search by employee name or ID..."
+              placeholderTextColor="#aaa"
+              clearButtonMode="while-editing"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Text style={styles.clearBtn}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+          {searchQuery.length > 0 && (
+            <Text style={styles.searchResult}>
+              {filteredBookings.length} result{filteredBookings.length !== 1 ? 's' : ''} for "{searchQuery}"
+            </Text>
+          )}
         </View>
       );
     }
 
-    // Empty states
     if (item === 'empty_specials') {
       return <Text style={styles.emptyText}>No specials published yet.</Text>;
     }
     if (item === 'empty_bookings') {
-      return <Text style={styles.emptyText}>No bookings found.</Text>;
+      return (
+        <Text style={styles.emptyText}>
+          {searchQuery.length > 0
+            ? `No bookings found for "${searchQuery}"`
+            : 'No bookings found.'}
+        </Text>
+      );
     }
 
-    // Specials section
     if (section.title === 'Specials') {
       return (
         <TouchableOpacity
@@ -187,7 +280,6 @@ export default function AdminDashboard({ navigation }) {
       );
     }
 
-    // Bookings section
     const status = item.status?.toLowerCase() ?? 'confirmed';
     const statusColor = STATUS_COLORS[status] ?? '#888';
 
@@ -218,7 +310,7 @@ export default function AdminDashboard({ navigation }) {
 
   const renderSectionHeader = ({ section }) => {
     if (section.title === 'header') return null;
-    return <Text style={styles.sectionTitle}>{section.title}</Text>;
+    return <Text style={styles.listSectionTitle}>{section.title}</Text>;
   };
 
   return (
@@ -253,7 +345,7 @@ const styles = StyleSheet.create({
   heading: { fontSize: 22, fontWeight: 'bold', color: '#1a1a1a' },
   logout: { fontSize: 14, color: '#005f99', fontWeight: '600' },
   dateLabel: { fontSize: 13, color: '#888', marginBottom: 12 },
-  statsHeading: {
+  sectionLabel: {
     fontSize: 13, fontWeight: 'bold', color: '#888',
     textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8,
   },
@@ -264,6 +356,31 @@ const styles = StyleSheet.create({
   },
   statNumber: { fontSize: 24, fontWeight: 'bold', color: '#1a1a1a' },
   statLabel: { fontSize: 12, color: '#888', marginTop: 4 },
+  breakdownBox: {
+    backgroundColor: '#fff', borderRadius: 12,
+    padding: 16, marginBottom: 14, elevation: 2,
+  },
+  mealWiseRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  mealWiseCard: {
+    backgroundColor: '#e8f4fd', borderRadius: 10,
+    padding: 12, alignItems: 'center', minWidth: 80,
+    borderLeftWidth: 3, borderLeftColor: '#005f99',
+  },
+  mealWiseCount: { fontSize: 22, fontWeight: 'bold', color: '#005f99' },
+  mealWiseLabel: { fontSize: 11, color: '#555', marginTop: 4, textAlign: 'center' },
+  outletRow: {
+    marginBottom: 12, paddingBottom: 12,
+    borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
+  },
+  outletName: { fontSize: 13, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 8 },
+  outletMealsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  outletMealBadge: {
+    backgroundColor: '#f0f9f0', borderRadius: 8,
+    paddingVertical: 6, paddingHorizontal: 12,
+    alignItems: 'center', borderLeftWidth: 3, borderLeftColor: '#27ae60',
+  },
+  outletMealCount: { fontSize: 16, fontWeight: 'bold', color: '#27ae60' },
+  outletMealLabel: { fontSize: 11, color: '#555', marginTop: 2 },
   specialBtn: {
     backgroundColor: '#005f99', padding: 14,
     borderRadius: 10, alignItems: 'center', marginBottom: 10,
@@ -275,11 +392,25 @@ const styles = StyleSheet.create({
   },
   menuBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
   outletBtn: {
-    backgroundColor: '#c92e2edd', padding: 14,
+    backgroundColor: '#8e44ad', padding: 14,
     borderRadius: 10, alignItems: 'center', marginBottom: 20,
   },
   outletBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
-  sectionTitle: {
+  searchBox: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#fff', borderRadius: 10,
+    borderWidth: 1, borderColor: '#ddd',
+    paddingHorizontal: 12, marginBottom: 8,
+    elevation: 1,
+  },
+  searchIcon: { fontSize: 16, marginRight: 8 },
+  searchInput: {
+    flex: 1, paddingVertical: 12,
+    fontSize: 15, color: '#111',
+  },
+  clearBtn: { fontSize: 16, color: '#888', paddingLeft: 8 },
+  searchResult: { fontSize: 12, color: '#888', marginBottom: 8 },
+  listSectionTitle: {
     fontSize: 16, fontWeight: 'bold', color: '#1a1a1a',
     marginBottom: 12, marginTop: 8,
   },
