@@ -23,6 +23,7 @@ export default function AdminDashboard({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [expandedOutlet, setExpandedOutlet] = useState(null);
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -61,6 +62,10 @@ export default function AdminDashboard({ navigation }) {
     navigation.replace('Login');
   };
 
+  const toggleOutlet = (outlet) => {
+    setExpandedOutlet((prev) => (prev === outlet ? null : outlet));
+  };
+
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -96,18 +101,17 @@ export default function AdminDashboard({ navigation }) {
     (b) => b.status?.toLowerCase() === 'cancelled'
   ).length;
 
-  // Meal wise counts for today
-  const mealWiseCounts = MEAL_TYPES.map((meal) => ({
-    meal,
-    count: todayBookings.filter(
-      (b) => b.mealType === meal && b.status?.toLowerCase() === 'confirmed'
-    ).length,
-  })).filter((m) => m.count > 0);
-
-  // Per outlet per meal counts
-  const outletMealMatrix = OUTLETS.map((outlet) => ({
+  // Per outlet: total confirmed bookings today
+  const outletTotals = OUTLETS.map((outlet) => ({
     outlet,
-    meals: MEAL_TYPES.map((meal) => ({
+    total: todayBookings.filter(
+      (b) => b.canteenLocation === outlet && b.status?.toLowerCase() === 'confirmed'
+    ).length,
+  }));
+
+  // Per outlet per meal counts — used when expanded
+  const getMealBreakdown = (outlet) => {
+    return MEAL_TYPES.map((meal) => ({
       meal,
       count: todayBookings.filter(
         (b) =>
@@ -115,8 +119,8 @@ export default function AdminDashboard({ navigation }) {
           b.mealType === meal &&
           b.status?.toLowerCase() === 'confirmed'
       ).length,
-    })).filter((m) => m.count > 0),
-  })).filter((o) => o.meals.length > 0);
+    })).filter((m) => m.count > 0);
+  };
 
   // Filter bookings by search query
   const filteredBookings = bookings.filter((b) => {
@@ -165,40 +169,62 @@ export default function AdminDashboard({ navigation }) {
             </View>
           </View>
 
-          {/* Meal Wise Counts */}
-          {mealWiseCounts.length > 0 && (
-            <View style={styles.breakdownBox}>
-              <Text style={styles.sectionLabel}>Today's Meal Breakdown</Text>
-              <View style={styles.mealWiseRow}>
-                {mealWiseCounts.map((m) => (
-                  <View key={m.meal} style={styles.mealWiseCard}>
-                    <Text style={styles.mealWiseCount}>{m.count}</Text>
-                    <Text style={styles.mealWiseLabel}>{m.meal}</Text>
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
+          {/* Per Outlet — tap to expand */}
+          <Text style={styles.sectionLabel}>Today's Bookings by Outlet</Text>
+          <View style={styles.outletListBox}>
+            {outletTotals.map(({ outlet, total }) => {
+              const isExpanded = expandedOutlet === outlet;
+              const breakdown = isExpanded ? getMealBreakdown(outlet) : [];
 
-          {/* Per Outlet Per Meal */}
-          {outletMealMatrix.length > 0 && (
-            <View style={styles.breakdownBox}>
-              <Text style={styles.sectionLabel}>Per Outlet Breakdown</Text>
-              {outletMealMatrix.map((o) => (
-                <View key={o.outlet} style={styles.outletRow}>
-                  <Text style={styles.outletName}>{o.outlet}</Text>
-                  <View style={styles.outletMealsRow}>
-                    {o.meals.map((m) => (
-                      <View key={m.meal} style={styles.outletMealBadge}>
-                        <Text style={styles.outletMealCount}>{m.count}</Text>
-                        <Text style={styles.outletMealLabel}>{m.meal}</Text>
+              return (
+                <View key={outlet} style={styles.outletCard}>
+                  <TouchableOpacity
+                    style={styles.outletCardHeader}
+                    onPress={() => toggleOutlet(outlet)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.outletCardLeft}>
+                      <Text style={styles.outletCardName}>{outlet}</Text>
+                      <Text style={styles.outletCardSub}>
+                        {total} order{total !== 1 ? 's' : ''} today
+                      </Text>
+                    </View>
+                    <View style={styles.outletCardRight}>
+                      <View style={styles.outletCountBadge}>
+                        <Text style={styles.outletCountBadgeText}>{total}</Text>
                       </View>
-                    ))}
-                  </View>
+                      <Text style={styles.chevron}>{isExpanded ? '▲' : '▼'}</Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  {isExpanded && (
+                    <View style={styles.outletCardBody}>
+                      {breakdown.length === 0 ? (
+                        <Text style={styles.noBookingsText}>No bookings today.</Text>
+                      ) : (
+                        <View style={styles.mealWiseRow}>
+                          {breakdown.map((m) => (
+                            <View key={m.meal} style={styles.mealWiseCard}>
+                              <Text style={styles.mealWiseCount}>{m.count}</Text>
+                              <Text style={styles.mealWiseLabel}>{m.meal}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      )}
+                      <TouchableOpacity
+                        style={styles.viewAllBtn}
+                        onPress={() =>
+                          navigation.navigate('OutletBookings', { outlet })
+                        }
+                      >
+                        <Text style={styles.viewAllBtnText}>View All Bookings →</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
-              ))}
-            </View>
-          )}
+              );
+            })}
+          </View>
 
           {/* Action Buttons */}
           <TouchableOpacity
@@ -356,31 +382,45 @@ const styles = StyleSheet.create({
   },
   statNumber: { fontSize: 24, fontWeight: 'bold', color: '#1a1a1a' },
   statLabel: { fontSize: 12, color: '#888', marginTop: 4 },
-  breakdownBox: {
+  outletListBox: { marginBottom: 16 },
+  outletCard: {
     backgroundColor: '#fff', borderRadius: 12,
-    padding: 16, marginBottom: 14, elevation: 2,
+    marginBottom: 10, elevation: 2, overflow: 'hidden',
   },
-  mealWiseRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  outletCardHeader: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', padding: 14,
+  },
+  outletCardLeft: { flex: 1 },
+  outletCardName: { fontSize: 15, fontWeight: 'bold', color: '#1a1a1a' },
+  outletCardSub: { fontSize: 12, color: '#888', marginTop: 2 },
+  outletCardRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  outletCountBadge: {
+    backgroundColor: '#005f99', borderRadius: 16,
+    paddingVertical: 4, paddingHorizontal: 12,
+  },
+  outletCountBadgeText: { color: '#fff', fontWeight: 'bold', fontSize: 14 },
+  chevron: { fontSize: 12, color: '#888' },
+  outletCardBody: {
+    padding: 14, paddingTop: 0,
+    borderTopWidth: 1, borderTopColor: '#f0f0f0',
+  },
+  noBookingsText: {
+    fontSize: 13, color: '#888', textAlign: 'center', paddingVertical: 10,
+  },
+  mealWiseRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12 },
   mealWiseCard: {
     backgroundColor: '#e8f4fd', borderRadius: 10,
-    padding: 12, alignItems: 'center', minWidth: 80,
+    padding: 12, alignItems: 'center', minWidth: 75,
     borderLeftWidth: 3, borderLeftColor: '#005f99',
   },
-  mealWiseCount: { fontSize: 22, fontWeight: 'bold', color: '#005f99' },
+  mealWiseCount: { fontSize: 20, fontWeight: 'bold', color: '#005f99' },
   mealWiseLabel: { fontSize: 11, color: '#555', marginTop: 4, textAlign: 'center' },
-  outletRow: {
-    marginBottom: 12, paddingBottom: 12,
-    borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
+  viewAllBtn: {
+    marginTop: 12, paddingVertical: 8,
+    alignItems: 'center',
   },
-  outletName: { fontSize: 13, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 8 },
-  outletMealsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  outletMealBadge: {
-    backgroundColor: '#f0f9f0', borderRadius: 8,
-    paddingVertical: 6, paddingHorizontal: 12,
-    alignItems: 'center', borderLeftWidth: 3, borderLeftColor: '#27ae60',
-  },
-  outletMealCount: { fontSize: 16, fontWeight: 'bold', color: '#27ae60' },
-  outletMealLabel: { fontSize: 11, color: '#555', marginTop: 2 },
+  viewAllBtnText: { fontSize: 13, color: '#005f99', fontWeight: '600' },
   specialBtn: {
     backgroundColor: '#005f99', padding: 14,
     borderRadius: 10, alignItems: 'center', marginBottom: 10,
