@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,
-  TouchableOpacity, TextInput, Alert, ActivityIndicator, Image
+  TouchableOpacity, TextInput, Alert, ActivityIndicator, Image, Modal
 } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -12,6 +12,13 @@ const OUTLETS = ['Central Canteen', 'Administrative Building', 'Central Control 
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Evening Snacks', 'Dinner'];
 const MEAL_CATEGORIES = ['Veg', 'Paneer', 'Non-Veg'];
 const CATEGORY_MEAL_TYPES = ['Lunch', 'Dinner'];
+
+const CUTOFF_DISPLAY = {
+  Breakfast: '8:30 AM',
+  Lunch: '10:30 AM',
+  'Evening Snacks': '3:00 PM',
+  Dinner: '5:00 PM',
+};
 
 function formatDate(date) {
   return date.toISOString().split('T')[0];
@@ -41,6 +48,8 @@ export default function BookMealScreen({ navigation }) {
   const [nonVegCount, setNonVegCount] = useState('');
   const [loading, setLoading] = useState(false);
   const [specials, setSpecials] = useState([]);
+  const [showSummary, setShowSummary] = useState(false);
+  const [networkError, setNetworkError] = useState(false);
 
   const showCategorySection = CATEGORY_MEAL_TYPES.includes(mealType);
 
@@ -75,10 +84,26 @@ export default function BookMealScreen({ navigation }) {
     if (!activeSpecial) setIsSpecialMeal(false);
   }, [mealType, outlet]);
 
-  // Reset meal category when switching to Breakfast/Evening Snacks
   useEffect(() => {
     if (!showCategorySection) setMealCategory(null);
   }, [mealType]);
+
+  // Check if cutoff might have passed (display hint only — backend enforces)
+  const isTodaySelected = fromDate === formatDate(today);
+  const cutoffWarning = (() => {
+    if (!mealType || !isTodaySelected) return null;
+    const cutoffTimes = {
+      Breakfast: { h: 8, m: 30 },
+      Lunch: { h: 10, m: 30 },
+      'Evening Snacks': { h: 15, m: 0 },
+      Dinner: { h: 17, m: 0 },
+    };
+    const c = cutoffTimes[mealType];
+    if (!c) return null;
+    const cutoffDate = new Date();
+    cutoffDate.setHours(c.h, c.m, 0, 0);
+    return new Date() > cutoffDate;
+  })();
 
   const validate = () => {
     if (!fromDate || !toDate) return 'Please select both From and To dates.';
@@ -101,11 +126,13 @@ export default function BookMealScreen({ navigation }) {
     return null;
   };
 
-  const handleSubmit = async () => {
+  const handleReview = () => {
     const error = validate();
     if (error) { Alert.alert('Validation Error', error); return; }
+    setShowSummary(true);
+  };
 
-    // For Breakfast and Evening Snacks default to vegCount = 1
+  const buildPayload = () => {
     const getSelfVeg = () => {
       if (isSpecialMeal) return 0;
       if (!showCategorySection) return 1;
@@ -122,7 +149,7 @@ export default function BookMealScreen({ navigation }) {
       return mealCategory === 'Non-Veg' ? 1 : 0;
     };
 
-    const payload = {
+    return {
       fromDate,
       toDate,
       canteenLocation: outlet,
@@ -140,24 +167,46 @@ export default function BookMealScreen({ navigation }) {
         : getSelfNonVeg(),
       isSpecialMeal,
     };
+  };
+
+  const handleSubmit = async () => {
+    const payload = buildPayload();
 
     try {
       setLoading(true);
+      setNetworkError(false);
       const response = await api.post('/Bookings', payload);
       const bookingId = response.data.bookingID ?? response.data.bookingId ?? response.data.id;
+      setShowSummary(false);
       Alert.alert('Booking Confirmed! 🎉', `Your Booking ID is: ${bookingId}`, [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
     } catch (err) {
-      Alert.alert('Error', err.response?.data?.message ?? 'Booking failed. Please try again.');
+      if (!err.response) {
+        setNetworkError(true);
+        Alert.alert(
+          'No Internet Connection',
+          'Please check your network connection and try again.'
+        );
+      } else {
+        Alert.alert('Error', err.response?.data?.message ?? 'Booking failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
+  const summary = buildPayload();
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Book a Meal</Text>
+
+      {networkError && (
+        <View style={styles.offlineBanner}>
+          <Text style={styles.offlineText}>📡 No internet connection</Text>
+        </View>
+      )}
 
       {/* From Date */}
       <Text style={styles.label}>From Date</Text>
@@ -242,6 +291,15 @@ export default function BookMealScreen({ navigation }) {
         ))}
       </View>
 
+      {/* Cutoff hint */}
+      {mealType && (
+        <Text style={[styles.cutoffHint, cutoffWarning && styles.cutoffHintWarning]}>
+          {cutoffWarning
+            ? `⚠ Today's booking window for ${mealType} (closes ${CUTOFF_DISPLAY[mealType]}) may have passed.`
+            : `⏰ Booking for ${mealType} closes at ${CUTOFF_DISPLAY[mealType]} on the day of the meal.`}
+        </Text>
+      )}
+
       {/* Booking For */}
       <Text style={styles.label}>Booking For</Text>
       <View style={styles.buttonRow}>
@@ -288,7 +346,7 @@ export default function BookMealScreen({ navigation }) {
         </View>
       )}
 
-      {/* Meal Category — only for Lunch and Dinner, Self, regular meal */}
+      {/* Meal Category — only for Lunch and Dinner */}
       {!isSpecialMeal && bookingFor === 'Self' && showCategorySection && (
         <>
           <Text style={styles.label}>Meal Category</Text>
@@ -317,7 +375,6 @@ export default function BookMealScreen({ navigation }) {
             keyboardType="numeric"
             placeholder="e.g. 3"
           />
-          {/* Veg/Paneer/Non-Veg only for Lunch and Dinner */}
           {!isSpecialMeal && showCategorySection && (
             <>
               <Text style={styles.label}>Veg Count</Text>
@@ -349,17 +406,92 @@ export default function BookMealScreen({ navigation }) {
         </>
       )}
 
-      {/* Submit */}
+      {/* Review button */}
       <TouchableOpacity
-        style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
-        onPress={handleSubmit}
-        disabled={loading}
+        style={styles.submitBtn}
+        onPress={handleReview}
       >
-        {loading
-          ? <ActivityIndicator color="#fff" />
-          : <Text style={styles.submitText}>Confirm Booking</Text>
-        }
+        <Text style={styles.submitText}>Review Booking</Text>
       </TouchableOpacity>
+
+      {/* Summary Modal */}
+      <Modal
+        visible={showSummary}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowSummary(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalHeading}>Confirm Your Booking</Text>
+
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Date</Text>
+              <Text style={styles.summaryValue}>
+                {summary.fromDate === summary.toDate
+                  ? summary.fromDate
+                  : `${summary.fromDate} → ${summary.toDate}`}
+              </Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Outlet</Text>
+              <Text style={styles.summaryValue}>{summary.canteenLocation}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Meal</Text>
+              <Text style={styles.summaryValue}>
+                {summary.isSpecialMeal ? `🌟 ${summary.mealType} (Special)` : summary.mealType}
+              </Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Booked For</Text>
+              <Text style={styles.summaryValue}>{summary.bookingFor}</Text>
+            </View>
+            {summary.bookingFor === 'Guests' && (
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Guests</Text>
+                <Text style={styles.summaryValue}>{summary.guestCount} persons</Text>
+              </View>
+            )}
+            {showCategorySection && !summary.isSpecialMeal && (
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Category</Text>
+                <Text style={styles.summaryValue}>
+                  {summary.bookingFor === 'Self'
+                    ? mealCategory
+                    : `${summary.vegCount} Veg · ${summary.paneerCount} Paneer · ${summary.nonVegCount} Non-Veg`}
+                </Text>
+              </View>
+            )}
+
+            {cutoffWarning && (
+              <Text style={styles.modalWarning}>
+                ⚠ This meal's booking window may have already closed today.
+              </Text>
+            )}
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setShowSummary(false)}
+                disabled={loading}
+              >
+                <Text style={styles.modalCancelText}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalConfirmBtn, loading && styles.submitBtnDisabled]}
+                onPress={handleSubmit}
+                disabled={loading}
+              >
+                {loading
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={styles.modalConfirmText}>Confirm</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -370,6 +502,18 @@ const styles = StyleSheet.create({
   heading: { fontSize: 22, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 20 },
   label: { fontSize: 14, fontWeight: '600', color: '#333', marginTop: 16, marginBottom: 6 },
   hint: { fontSize: 11, color: '#888', marginTop: 4 },
+  cutoffHint: {
+    fontSize: 12, color: '#005f99', marginTop: 8,
+    backgroundColor: '#e8f4fd', padding: 8, borderRadius: 6,
+  },
+  cutoffHintWarning: {
+    color: '#c0392b', backgroundColor: '#fdecea',
+  },
+  offlineBanner: {
+    backgroundColor: '#fdecea', borderRadius: 8,
+    padding: 10, marginBottom: 16, alignItems: 'center',
+  },
+  offlineText: { color: '#c0392b', fontSize: 13, fontWeight: '600' },
   dateBtn: {
     backgroundColor: '#fff', borderWidth: 1, borderColor: '#ddd',
     borderRadius: 8, padding: 13, flexDirection: 'row', alignItems: 'center',
@@ -406,4 +550,34 @@ const styles = StyleSheet.create({
   },
   submitBtnDisabled: { backgroundColor: '#aaa' },
   submitText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    padding: 24, paddingBottom: 36,
+  },
+  modalHeading: { fontSize: 19, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 16 },
+  summaryRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
+  },
+  summaryLabel: { fontSize: 13, color: '#888', fontWeight: '500' },
+  summaryValue: { fontSize: 13, color: '#1a1a1a', fontWeight: '600', maxWidth: '60%', textAlign: 'right' },
+  modalWarning: {
+    fontSize: 12, color: '#c0392b', marginTop: 14,
+    backgroundColor: '#fdecea', padding: 10, borderRadius: 8,
+  },
+  modalButtons: { flexDirection: 'row', gap: 12, marginTop: 20 },
+  modalCancelBtn: {
+    flex: 1, padding: 14, borderRadius: 10,
+    alignItems: 'center', borderWidth: 1, borderColor: '#ccc',
+  },
+  modalCancelText: { color: '#555', fontWeight: '600', fontSize: 15 },
+  modalConfirmBtn: {
+    flex: 1, padding: 14, borderRadius: 10,
+    alignItems: 'center', backgroundColor: '#005f99',
+  },
+  modalConfirmText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
 });

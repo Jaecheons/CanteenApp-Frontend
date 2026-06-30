@@ -5,8 +5,11 @@ import {
   TouchableOpacity, Alert
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTheme } from '../context/ThemeContext';
 
 export default function ProfileScreen({ navigation }) {
+  const { isDark, toggleTheme } = useTheme();
+
   const [name, setName] = useState('');
   const [employeeID, setEmployeeID] = useState('');
   const [role, setRole] = useState('');
@@ -84,6 +87,20 @@ export default function ProfileScreen({ navigation }) {
         <Row label="Role" value={role} />
       </View>
 
+      {/* Settings Card */}
+      <View style={styles.card}>
+        <View style={styles.themeRow}>
+          <Text style={styles.themeLabel}>🌙 Dark Mode</Text>
+          <TouchableOpacity
+            style={[styles.themeSwitch, isDark && styles.themeSwitchOn]}
+            onPress={toggleTheme}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.themeSwitchDot, isDark && styles.themeSwitchDotOn]} />
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* Logout Button */}
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
         <Text style={styles.logoutText}>Logout</Text>
@@ -121,7 +138,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#fff', borderRadius: 12,
-    padding: 16, elevation: 2, marginBottom: 24,
+    padding: 16, elevation: 2, marginBottom: 16,
   },
   row: {
     flexDirection: 'row', justifyContent: 'space-between',
@@ -129,6 +146,21 @@ const styles = StyleSheet.create({
   },
   rowLabel: { fontSize: 14, color: '#888', fontWeight: '500' },
   rowValue: { fontSize: 14, color: '#1a1a1a', fontWeight: '600', maxWidth: '60%', textAlign: 'right' },
+  themeRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', paddingVertical: 4,
+  },
+  themeLabel: { fontSize: 15, color: '#1a1a1a', fontWeight: '600' },
+  themeSwitch: {
+    width: 50, height: 28, borderRadius: 14,
+    backgroundColor: '#ccc', padding: 3, justifyContent: 'center',
+  },
+  themeSwitchOn: { backgroundColor: '#005f99' },
+  themeSwitchDot: {
+    width: 22, height: 22, borderRadius: 11,
+    backgroundColor: '#fff',
+  },
+  themeSwitchDotOn: { transform: [{ translateX: 22 }] },
   logoutBtn: {
     backgroundColor: '#c0392b', padding: 16,
     borderRadius: 10, alignItems: 'center',

@@ -12,14 +12,9 @@ export default function HomeScreen({ navigation }) {
   const [name, setName] = useState('');
   const [specials, setSpecials] = useState([]);
   const [todayMenu, setTodayMenu] = useState({});
+  const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const MEAL_ORDER = [
-    'Breakfast',
-    'Lunch',
-    'Evening Snacks',
-    'Dinner',
-  ];
 
   const getDayName = () => {
     return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
@@ -30,10 +25,14 @@ export default function HomeScreen({ navigation }) {
       const storedName = await AsyncStorage.getItem('name');
       if (storedName) setName(storedName);
 
-      const [specialsRes, menuRes] = await Promise.all([
+      const [specialsRes, menuRes, notifRes] = await Promise.all([
         api.get('/Specials/today').catch(() => ({ data: [] })),
         api.get(`/Menu/${getDayName()}`).catch(() => ({ data: [] })),
+        api.get('/Notifications/my').catch(() => ({ data: [] })),
       ]);
+
+      const unread = (notifRes.data ?? []).filter((n) => !n.isRead).length;
+      setUnreadCount(unread);
 
       // Load local images for each special
       const specialsWithImages = await Promise.all(
@@ -106,12 +105,25 @@ export default function HomeScreen({ navigation }) {
           <Text style={styles.greeting}>Hello, {name} 👋</Text>
           <Text style={styles.date}>{getDayName()}, {new Date().toLocaleDateString()}</Text>
         </View>
-        <TouchableOpacity
-          style={styles.profileBtn}
-          onPress={() => navigation.navigate('Profile')}
-        >
-          <Text style={styles.profileBtnText}>👤</Text>
-        </TouchableOpacity>
+        <View style={styles.headerIcons}>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => navigation.navigate('Notifications')}
+          >
+            <Text style={styles.iconBtnText}>🔔</Text>
+            {unreadCount > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => navigation.navigate('Profile')}
+          >
+            <Text style={styles.iconBtnText}>👤</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Today's Special Banner */}
@@ -158,24 +170,20 @@ export default function HomeScreen({ navigation }) {
       </TouchableOpacity>
 
       {/* Today's Menu Preview */}
-
       {Object.keys(todayMenu).length > 0 && (
         <>
           <Text style={styles.sectionTitle}>Today's Menu</Text>
           <View style={styles.menuCard}>
-            {Object.entries(todayMenu)
-              .sort(([a], [b]) => MEAL_ORDER.indexOf(a) - MEAL_ORDER.indexOf(b))
-            
-              .map(([mealType, items]) => (
-                <View key={mealType} style={styles.mealTypeBlock}>
-                  <Text style={styles.mealTypeTitle}>{mealType}</Text>
-                  {items.map((item, index) => (
-                    <Text key={index} style={styles.menuItem}>
-                      · {item.itemName}
-                    </Text>
-                  ))}
-                </View>
-              ))}
+            {Object.entries(todayMenu).map(([mealType, items]) => (
+              <View key={mealType} style={styles.mealTypeBlock}>
+                <Text style={styles.mealTypeTitle}>{mealType}</Text>
+                {items.map((item, index) => (
+                  <Text key={index} style={styles.menuItem}>
+                    · {item.itemName}
+                  </Text>
+                ))}
+              </View>
+            ))}
           </View>
         </>
       )}
@@ -193,7 +201,8 @@ const styles = StyleSheet.create({
   },
   greeting: { fontSize: 20, fontWeight: 'bold', color: '#1a1a1a' },
   date: { fontSize: 13, color: '#888', marginTop: 2 },
-  profileBtn: {
+  headerIcons: { flexDirection: 'row', gap: 10 },
+  iconBtn: {
     backgroundColor: '#005f99',
     width: 40, height: 40,
     borderRadius: 20,
@@ -201,7 +210,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     elevation: 2,
   },
-  profileBtnText: { fontSize: 20 },
+  iconBtnText: { fontSize: 18 },
+  badge: {
+    position: 'absolute', top: -4, right: -4,
+    backgroundColor: '#c0392b',
+    borderRadius: 10, minWidth: 18, height: 18,
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  badgeText: { color: '#fff', fontSize: 10, fontWeight: 'bold' },
   specialBanner: {
     backgroundColor: '#fff8e1', borderRadius: 12,
     padding: 16, marginBottom: 20,

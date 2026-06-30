@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
   },
   menuBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
   outletBtn: {
-    backgroundColor: '#8e44ad', padding: 14,
+    backgroundColor: '#ab4444', padding: 14,
     borderRadius: 10, alignItems: 'center', marginBottom: 20,
   },
   outletBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
