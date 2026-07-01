@@ -248,6 +248,13 @@ export default function AdminDashboard({ navigation }) {
             <Text style={styles.outletBtnText}>📍 View by Outlet</Text>
           </TouchableOpacity>
 
+          <TouchableOpacity
+            style={styles.announceBtn}
+            onPress={() => navigation.navigate('SendAnnouncement')}
+          >
+            <Text style={styles.announceBtnText}>📣 Send Announcement</Text>
+          </TouchableOpacity>
+
           {/* Search Bar */}
           <Text style={styles.sectionLabel}>Search Bookings</Text>
           <View style={styles.searchBox}>
@@ -433,9 +440,14 @@ const styles = StyleSheet.create({
   menuBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
   outletBtn: {
     backgroundColor: '#ab4444', padding: 14,
-    borderRadius: 10, alignItems: 'center', marginBottom: 20,
+    borderRadius: 10, alignItems: 'center', marginBottom: 10,
   },
   outletBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  announceBtn: {
+    backgroundColor: '#e67e22', padding: 14,
+    borderRadius: 10, alignItems: 'center', marginBottom: 20,
+  },
+  announceBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
   searchBox: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#fff', borderRadius: 10,

@@ -5,18 +5,53 @@ import {
   TouchableOpacity, ActivityIndicator, RefreshControl
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
 
 export default function NotificationsScreen({ navigation }) {
-  const [notifications, setNotifications] = useState([]);
+  const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchNotifications = async () => {
+  const fetchAll = async () => {
     try {
-      const response = await api.get('/Notifications/my');
-      setNotifications(response.data ?? []);
+      const [notifRes, announcementsRes] = await Promise.all([
+        api.get('/Notifications/my').catch(() => ({ data: [] })),
+        api.get('/Announcements').catch(() => ({ data: [] })),
+      ]);
+
+      // Load which announcements have already been read locally
+      const readIdsRaw = await AsyncStorage.getItem('readAnnouncementIds');
+      const readIds = readIdsRaw ? JSON.parse(readIdsRaw) : [];
+
+      const bookingNotifs = (notifRes.data ?? []).map((n) => ({
+        id: `notif-${n.notificationID}`,
+        rawId: n.notificationID,
+        type: 'booking',
+        title: n.title,
+        message: n.message,
+        isRead: n.isRead,
+        createdAt: n.createdAt,
+        relatedBookingID: n.relatedBookingID,
+      }));
+
+      const announcementNotifs = (announcementsRes.data ?? []).map((a) => ({
+        id: `announce-${a.announcementID}`,
+        rawId: a.announcementID,
+        type: 'announcement',
+        title: a.title,
+        message: a.message,
+        isRead: readIds.includes(a.announcementID),
+        createdAt: a.createdAt,
+        publishedBy: a.publishedBy,
+      }));
+
+      const combined = [...bookingNotifs, ...announcementNotifs].sort(
+        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+      );
+
+      setItems(combined);
       setError(null);
     } catch (err) {
       console.log('NOTIFICATIONS ERROR:', err.response?.status);
@@ -30,21 +65,21 @@ export default function NotificationsScreen({ navigation }) {
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
-      fetchNotifications();
+      fetchAll();
     }, [])
   );
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchNotifications();
+    fetchAll();
   };
 
-  const markAsRead = async (notificationID) => {
+  const markBookingAsRead = async (notificationID) => {
     try {
       await api.put(`/Notifications/${notificationID}/read`);
-      setNotifications((prev) =>
+      setItems((prev) =>
         prev.map((n) =>
-          n.notificationID === notificationID ? { ...n, isRead: true } : n
+          n.type === 'booking' && n.rawId === notificationID ? { ...n, isRead: true } : n
         )
       );
     } catch (err) {
@@ -52,17 +87,42 @@ export default function NotificationsScreen({ navigation }) {
     }
   };
 
+  const markAnnouncementAsRead = async (announcementID) => {
+    try {
+      const readIdsRaw = await AsyncStorage.getItem('readAnnouncementIds');
+      const readIds = readIdsRaw ? JSON.parse(readIdsRaw) : [];
+      if (!readIds.includes(announcementID)) {
+        readIds.push(announcementID);
+        await AsyncStorage.setItem('readAnnouncementIds', JSON.stringify(readIds));
+      }
+      setItems((prev) =>
+        prev.map((n) =>
+          n.type === 'announcement' && n.rawId === announcementID ? { ...n, isRead: true } : n
+        )
+      );
+    } catch (err) {
+      console.log('MARK ANNOUNCEMENT READ ERROR:', err);
+    }
+  };
+
   const markAllAsRead = async () => {
     try {
-      await api.put('/Notifications/mark-all-read');
-      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      await api.put('/Notifications/mark-all-read').catch(() => {});
+      const allAnnouncementIds = items
+        .filter((n) => n.type === 'announcement')
+        .map((n) => n.rawId);
+      await AsyncStorage.setItem('readAnnouncementIds', JSON.stringify(allAnnouncementIds));
+      setItems((prev) => prev.map((n) => ({ ...n, isRead: true })));
     } catch (err) {
-      console.log('MARK ALL READ ERROR:', err.response?.status);
+      console.log('MARK ALL READ ERROR:', err);
     }
   };
 
   const handlePress = (item) => {
-    if (!item.isRead) markAsRead(item.notificationID);
+    if (!item.isRead) {
+      if (item.type === 'booking') markBookingAsRead(item.rawId);
+      else markAnnouncementAsRead(item.rawId);
+    }
     if (item.relatedBookingID) {
       navigation.navigate('MyBookings');
     }
@@ -71,11 +131,9 @@ export default function NotificationsScreen({ navigation }) {
   const timeAgo = (dateStr) => {
     const date = new Date(dateStr);
     const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
+    const diffMins = Math.floor((now - date) / 60000);
     const diffHours = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHours / 24);
-
     if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
@@ -83,7 +141,7 @@ export default function NotificationsScreen({ navigation }) {
     return date.toLocaleDateString();
   };
 
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const unreadCount = items.filter((n) => !n.isRead).length;
 
   const renderItem = ({ item }) => (
     <TouchableOpacity
@@ -92,12 +150,17 @@ export default function NotificationsScreen({ navigation }) {
     >
       <View style={styles.cardTop}>
         {!item.isRead && <View style={styles.unreadDot} />}
-        <Text style={[styles.title, !item.isRead && styles.titleUnread]}>
-          {item.title}
+        <Text style={styles.typeTag}>
+          {item.type === 'announcement' ? '📢 ANNOUNCEMENT' : '🔔 BOOKING'}
         </Text>
       </View>
+      <Text style={[styles.title, !item.isRead && styles.titleUnread]}>
+        {item.title}
+      </Text>
       <Text style={styles.message}>{item.message}</Text>
-      <Text style={styles.time}>{timeAgo(item.createdAt)}</Text>
+      <Text style={styles.time}>
+        {item.publishedBy ? `By ${item.publishedBy} · ` : ''}{timeAgo(item.createdAt)}
+      </Text>
     </TouchableOpacity>
   );
 
@@ -113,7 +176,7 @@ export default function NotificationsScreen({ navigation }) {
     return (
       <View style={styles.centered}>
         <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.btn} onPress={fetchNotifications}>
+        <TouchableOpacity style={styles.btn} onPress={fetchAll}>
           <Text style={styles.btnText}>Retry</Text>
         </TouchableOpacity>
       </View>
@@ -124,8 +187,8 @@ export default function NotificationsScreen({ navigation }) {
     <FlatList
       style={styles.container}
       contentContainerStyle={styles.content}
-      data={notifications}
-      keyExtractor={(item) => String(item.notificationID)}
+      data={items}
+      keyExtractor={(item) => item.id}
       renderItem={renderItem}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#005f99']} />
@@ -177,7 +240,8 @@ const styles = StyleSheet.create({
     width: 8, height: 8, borderRadius: 4,
     backgroundColor: '#005f99', marginRight: 8,
   },
-  title: { fontSize: 15, fontWeight: '600', color: '#333' },
+  typeTag: { fontSize: 10, fontWeight: 'bold', color: '#888', letterSpacing: 0.5 },
+  title: { fontSize: 15, fontWeight: '600', color: '#333', marginBottom: 4 },
   titleUnread: { fontWeight: 'bold', color: '#1a1a1a' },
   message: { fontSize: 13, color: '#555', marginBottom: 6 },
   time: { fontSize: 11, color: '#aaa' },
