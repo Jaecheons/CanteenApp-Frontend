@@ -35,13 +35,14 @@ export default function SendAnnouncementScreen() {
 
   const validate = () => {
     if (!title.trim()) return 'Please enter a title.';
-    if (!message.trim()) return 'Please enter a message.';
     return null;
   };
 
   const handleSend = async () => {
-    const error = validate();
-    if (error) { Alert.alert('Validation Error', error); return; }
+    await api.post('/Announcements', {
+    title: title.trim(),
+    message: message.trim(),
+});
 
     try {
       setSending(true);
@@ -49,7 +50,7 @@ export default function SendAnnouncementScreen() {
         title: title.trim(),
         message: message.trim(),
       });
-      Alert.alert('Sent! 📢', 'Announcement has been sent to all employees.', [
+      Alert.alert('Sent! ', 'Announcement has been sent to all employees.', [
         {
           text: 'OK',
           onPress: () => {
@@ -118,7 +119,7 @@ export default function SendAnnouncementScreen() {
         placeholder="e.g. Canteen Closed Tomorrow"
       />
 
-      <Text style={styles.label}>Message</Text>
+      <Text style={styles.label}>Message <Text style={styles.optionalTag}>(optional)</Text></Text>
       <TextInput
         style={[styles.input, styles.textArea]}
         value={message}
@@ -135,7 +136,7 @@ export default function SendAnnouncementScreen() {
       >
         {sending
           ? <ActivityIndicator color="#fff" />
-          : <Text style={styles.sendBtnText}>📢 Send to All Employees</Text>
+          : <Text style={styles.sendBtnText}> Send to All Employees</Text>
         }
       </TouchableOpacity>
 
@@ -172,6 +173,7 @@ export default function SendAnnouncementScreen() {
 }
 
 const styles = StyleSheet.create({
+  optionalTag: { fontSize: 12, color: '#aaa', fontWeight: '400' },
   container: { flex: 1, backgroundColor: '#f5f5f5' },
   content: { padding: 20, paddingBottom: 40 },
   heading: { fontSize: 22, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 4 },

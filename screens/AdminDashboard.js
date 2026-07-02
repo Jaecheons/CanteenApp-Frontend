@@ -24,6 +24,7 @@ export default function AdminDashboard({ navigation }) {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedOutlet, setExpandedOutlet] = useState(null);
+  const [showHistory, setShowHistory] = useState(false);
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -131,9 +132,19 @@ export default function AdminDashboard({ navigation }) {
     return name.includes(query) || id.includes(query);
   });
 
+  // Split specials into active (today or future) and past (history)
+  const activeSpecials = specials.filter(
+    (s) => (s.date?.split('T')[0] ?? '') >= todayStr
+  );
+  const pastSpecials = specials
+    .filter((s) => (s.date?.split('T')[0] ?? '') < todayStr)
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const specialsSectionData = activeSpecials.length > 0 ? activeSpecials : ['empty_specials'];
+
   const sections = [
     { title: 'header', data: ['header'] },
-    { title: 'Specials', data: specials.length > 0 ? specials : ['empty_specials'] },
+    { title: 'Specials', data: specialsSectionData },
     { title: 'All Bookings', data: filteredBookings.length > 0 ? filteredBookings : ['empty_bookings'] },
   ];
 
@@ -231,14 +242,14 @@ export default function AdminDashboard({ navigation }) {
             style={styles.specialBtn}
             onPress={() => navigation.navigate('PublishSpecial')}
           >
-            <Text style={styles.specialBtnText}>📢 Publish Special Meal</Text>
+            <Text style={styles.specialBtnText}> Publish Special Meal</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.menuBtn}
             onPress={() => navigation.navigate('AdminMenu')}
           >
-            <Text style={styles.menuBtnText}>🍽 Manage Weekly Menu</Text>
+            <Text style={styles.menuBtnText}>Manage Weekly Menu</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -252,7 +263,14 @@ export default function AdminDashboard({ navigation }) {
             style={styles.announceBtn}
             onPress={() => navigation.navigate('SendAnnouncement')}
           >
-            <Text style={styles.announceBtnText}>📣 Send Announcement</Text>
+            <Text style={styles.announceBtnText}>Send Announcement</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.addUserBtn}
+            onPress={() => navigation.navigate('AddEmployee')}
+          >
+            <Text style={styles.addUserBtnText}>👤 Add New User</Text>
           </TouchableOpacity>
 
           {/* Search Bar */}
@@ -283,7 +301,12 @@ export default function AdminDashboard({ navigation }) {
     }
 
     if (item === 'empty_specials') {
-      return <Text style={styles.emptyText}>No specials published yet.</Text>;
+      return (
+        <View>
+          <Text style={styles.emptyText}>No active or upcoming specials.</Text>
+          {pastSpecials.length > 0 && renderHistoryToggle()}
+        </View>
+      );
     }
     if (item === 'empty_bookings') {
       return (
@@ -296,20 +319,25 @@ export default function AdminDashboard({ navigation }) {
     }
 
     if (section.title === 'Specials') {
+      const isLastActiveItem = activeSpecials[activeSpecials.length - 1] === item;
+
       return (
-        <TouchableOpacity
-          style={styles.specialCard}
-          onPress={() => navigation.navigate('PublishSpecial', { special: item })}
-        >
-          <View style={styles.cardTop}>
-            <Text style={styles.specialName}>{item.specialName}</Text>
-            <Text style={styles.specialMealType}>{item.mealType}</Text>
-          </View>
-          <Text style={styles.specialDate}>{item.date?.split('T')[0]}</Text>
-          <Text style={styles.specialOutlets}>
-            📍 {item.applicableOutlets?.join(', ')}
-          </Text>
-        </TouchableOpacity>
+        <View>
+          <TouchableOpacity
+            style={styles.specialCard}
+            onPress={() => navigation.navigate('PublishSpecial', { special: item })}
+          >
+            <View style={styles.cardTop}>
+              <Text style={styles.specialName}>{item.specialName}</Text>
+              <Text style={styles.specialMealType}>{item.mealType}</Text>
+            </View>
+            <Text style={styles.specialDate}>{item.date?.split('T')[0]}</Text>
+            <Text style={styles.specialOutlets}>
+              📍 {item.applicableOutlets?.join(', ')}
+            </Text>
+          </TouchableOpacity>
+          {isLastActiveItem && pastSpecials.length > 0 && renderHistoryToggle()}
+        </View>
       );
     }
 
@@ -341,6 +369,36 @@ export default function AdminDashboard({ navigation }) {
     );
   };
 
+  const renderHistoryToggle = () => (
+    <View>
+      <TouchableOpacity
+        style={styles.historyToggle}
+        onPress={() => setShowHistory((prev) => !prev)}
+      >
+        <Text style={styles.historyToggleText}>
+          {showHistory ? '▲ Hide' : '▼ Show'} Special Meals History ({pastSpecials.length})
+        </Text>
+      </TouchableOpacity>
+
+      {showHistory && pastSpecials.map((item) => (
+        <TouchableOpacity
+          key={item.specialID}
+          style={[styles.specialCard, styles.specialCardPast]}
+          onPress={() => navigation.navigate('PublishSpecial', { special: item })}
+        >
+          <View style={styles.cardTop}>
+            <Text style={[styles.specialName, styles.specialNamePast]}>{item.specialName}</Text>
+            <Text style={styles.specialMealType}>{item.mealType}</Text>
+          </View>
+          <Text style={styles.specialDate}>{item.date?.split('T')[0]} (past)</Text>
+          <Text style={styles.specialOutlets}>
+            📍 {item.applicableOutlets?.join(', ')}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
   const renderSectionHeader = ({ section }) => {
     if (section.title === 'header') return null;
     return <Text style={styles.listSectionTitle}>{section.title}</Text>;
@@ -370,7 +428,7 @@ const styles = StyleSheet.create({
   content: { padding: 20, paddingBottom: 40 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
   loadingText: { marginTop: 12, color: '#888', fontSize: 14 },
-  errorText: { color: '#c0392b', fontSize: 15, textAlign: 'center', marginBottom: 16 },
+  errorText: { color: '#ff1900ba', fontSize: 15, textAlign: 'center', marginBottom: 16 },
   header: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', marginTop: 50, marginBottom: 8,
@@ -439,15 +497,20 @@ const styles = StyleSheet.create({
   },
   menuBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
   outletBtn: {
-    backgroundColor: '#ab4444', padding: 14,
+    backgroundColor: '#b01111', padding: 14,
     borderRadius: 10, alignItems: 'center', marginBottom: 10,
   },
   outletBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
   announceBtn: {
     backgroundColor: '#e67e22', padding: 14,
-    borderRadius: 10, alignItems: 'center', marginBottom: 20,
+    borderRadius: 10, alignItems: 'center', marginBottom: 10,
   },
   announceBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  addUserBtn: {
+    backgroundColor: '#16a085', padding: 14,
+    borderRadius: 10, alignItems: 'center', marginBottom: 20,
+  },
+  addUserBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
   searchBox: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#fff', borderRadius: 10,
@@ -472,10 +535,20 @@ const styles = StyleSheet.create({
     padding: 14, marginBottom: 10, elevation: 2,
     borderLeftWidth: 4, borderLeftColor: '#f39c12',
   },
+  specialCardPast: {
+    backgroundColor: '#f0f0f0', borderLeftColor: '#aaa', opacity: 0.8,
+  },
   specialName: { fontSize: 15, fontWeight: 'bold', color: '#1a1a1a' },
+  specialNamePast: { color: '#666' },
   specialMealType: { fontSize: 12, color: '#e67e22', fontWeight: '600' },
   specialDate: { fontSize: 13, color: '#555', marginTop: 4 },
   specialOutlets: { fontSize: 13, color: '#555', marginTop: 2 },
+  historyToggle: {
+    paddingVertical: 10, alignItems: 'center',
+    backgroundColor: '#fff', borderRadius: 10,
+    marginBottom: 10, borderWidth: 1, borderColor: '#ddd',
+  },
+  historyToggleText: { fontSize: 13, color: '#005f99', fontWeight: '600' },
   bookingCard: {
     backgroundColor: '#fff', borderRadius: 12,
     padding: 16, marginBottom: 14, elevation: 2,

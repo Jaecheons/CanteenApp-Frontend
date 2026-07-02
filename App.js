@@ -17,6 +17,7 @@ import OutletBookingsScreen from './screens/OutletBookingsScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import SendAnnouncementScreen from './screens/SendAnnouncementScreen';
+import AddEmployeeScreen from './screens/AddEmployeeScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -81,7 +82,12 @@ export default function App() {
         <Stack.Screen
           name="SendAnnouncement"
           component={SendAnnouncementScreen}
-          options={{ headerShown: true, title: 'Send Announcement' }}
+          options={{ headerShown: true, title: 'Send Announcement' }}  
+        />
+        <Stack.Screen
+          name="AddEmployee"
+          component={AddEmployeeScreen}
+          options={{ headerShown: true, title: 'Add New User' }}
         />
       </Stack.Navigator>
     </NavigationContainer>
