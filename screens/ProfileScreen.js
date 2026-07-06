@@ -11,6 +11,7 @@ export default function ProfileScreen({ navigation }) {
   const [employeeID, setEmployeeID] = useState('');
   const [role, setRole] = useState('');
   const [department, setDepartment] = useState('');
+  const [viewMode, setViewMode] = useState('');
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -18,10 +19,12 @@ export default function ProfileScreen({ navigation }) {
       const e = await AsyncStorage.getItem('employeeID');
       const r = await AsyncStorage.getItem('role');
       const d = await AsyncStorage.getItem('department');
+      const v = await AsyncStorage.getItem('viewMode');
       if (n) setName(n);
       if (e) setEmployeeID(e);
       if (r) setRole(r);
       if (d) setDepartment(d);
+      setViewMode(v || r || '');
     };
     loadProfile();
   }, []);
@@ -42,6 +45,16 @@ export default function ProfileScreen({ navigation }) {
         }
       ]
     );
+  };
+
+  const handleSwitchView = async () => {
+    if (viewMode === 'Admin') {
+      await AsyncStorage.setItem('viewMode', 'Employee');
+      navigation.navigate('Home');
+    } else {
+      await AsyncStorage.setItem('viewMode', 'Admin');
+      navigation.navigate('AdminDashboard');
+    }
   };
 
   const getInitials = (fullName) => {
@@ -83,6 +96,18 @@ export default function ProfileScreen({ navigation }) {
         <Row label="Department" value={department} />
         <Row label="Role" value={role} />
       </View>
+
+      {/* Switch View — only for actual Admin accounts */}
+      {role === 'Admin' && (
+        <TouchableOpacity
+          style={styles.switchBtn}
+          onPress={handleSwitchView}
+        >
+          <Text style={styles.switchBtnText}>
+            {viewMode === 'Admin' ? 'Switch to Employee View' : 'Switch to Admin View'}
+          </Text>
+        </TouchableOpacity>
+      )}
 
       {/* Logout Button */}
       <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
@@ -129,6 +154,11 @@ const styles = StyleSheet.create({
   },
   rowLabel: { fontSize: 14, color: '#888', fontWeight: '500' },
   rowValue: { fontSize: 14, color: '#1a1a1a', fontWeight: '600', maxWidth: '60%', textAlign: 'right' },
+  switchBtn: {
+    backgroundColor: '#005f99', padding: 16,
+    borderRadius: 10, alignItems: 'center', marginBottom: 16,
+  },
+  switchBtnText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
   logoutBtn: {
     backgroundColor: '#c0392b', padding: 16,
     borderRadius: 10, alignItems: 'center',

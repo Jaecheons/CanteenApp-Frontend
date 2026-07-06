@@ -156,19 +156,24 @@ export default function BookingDetailScreen({ route, navigation }) {
       <Text style={styles.sectionLabel}>Booking Details</Text>
       <View style={styles.card}>
         <Row
-          label="Meal Type"
-          value={booking.isSpecialMeal
-            ? `🌟 ${booking.mealType} (Special)`
-            : booking.mealType}
-        />
-        <Row label="From Date" value={booking.fromDate?.split('T')[0]} />
-        <Row label="To Date" value={booking.toDate?.split('T')[0]} />
-        <Row label="Outlet" value={booking.canteenLocation} />
-        <Row label="Booked For" value={booking.bookingFor} />
-        {booking.bookingFor === 'Guests' && (
-          <Row label="Total Guests" value={String(booking.guestCount)} />
-        )}
-      </View>
+        label="Meal Type"
+        value={booking.isSpecialMeal
+          ? `🌟 ${booking.mealType} (Special)`
+          : booking.mealType}
+          />
+          <Row label="From Date" value={booking.fromDate?.split('T')[0]} />
+          <Row label="To Date" value={booking.toDate?.split('T')[0]} />
+          <Row label="Outlet" value={booking.canteenLocation} />
+          <Row label="Booked For" value={booking.bookingFor} />
+          {booking.bookingFor === 'Guests' && (
+            <Row label="Total Guests" value={String(booking.guestCount)} />
+            )}
+            <Row label="Cost" value={booking.totalCost != null ? `₹${booking.totalCost}` : '—'} />
+            <Row
+            label="Collected"
+            value={booking.isCollected ? `Yes${booking.collectedAt ? ' · ' + booking.collectedAt.split('T')[0] : ''}` : 'Not yet'}
+            />
+            </View>
 
       {/* Editable fields — only if canModify */}
       {booking.canModify && (

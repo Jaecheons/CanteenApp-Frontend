@@ -1,17 +1,40 @@
 // screens/LoginScreen.js
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator,
   KeyboardAvoidingView, Platform, ImageBackground
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import api from '../services/api';
 
 export default function LoginScreen({ navigation }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+
+  // Load saved credentials on mount
+  useEffect(() => {
+    const loadSavedCredentials = async () => {
+      try {
+        const savedUsername = await AsyncStorage.getItem('savedUsername');
+        const savedPassword = await AsyncStorage.getItem('savedPassword');
+        const savedRememberMe = await AsyncStorage.getItem('rememberMe');
+
+        if (savedRememberMe === 'true') {
+          setRememberMe(true);
+          if (savedUsername) setUsername(savedUsername);
+          if (savedPassword) setPassword(savedPassword);
+        }
+      } catch (err) {
+        console.log('Failed to load saved credentials:', err);
+      }
+    };
+    loadSavedCredentials();
+  }, []);
 
   const handleLogin = async () => {
     if (!username || !password) {
@@ -22,17 +45,10 @@ export default function LoginScreen({ navigation }) {
     try {
       setLoading(true);
 
-      console.log('SENDING:', {
-        username: username,
-        password: password,
-      });
-
       const response = await api.post('/Auth/login', {
         username: username,
         password: password,
       });
-
-      console.log('LOGIN RESPONSE:', response.data);
 
       const {
         token,
@@ -42,15 +58,22 @@ export default function LoginScreen({ navigation }) {
         department,
       } = response.data;
 
-      console.log('STORING:', { token: !!token, role, name, employeeID, department });
-
       await AsyncStorage.setItem('token', token ?? '');
       await AsyncStorage.setItem('role', role ?? '');
       await AsyncStorage.setItem('name', name ?? '');
       await AsyncStorage.setItem('employeeID', String(employeeID ?? ''));
       await AsyncStorage.setItem('department', department ?? '');
 
-      console.log('STORED SUCCESSFULLY');
+      // Handle "remember me"
+      if (rememberMe) {
+        await AsyncStorage.setItem('savedUsername', username);
+        await AsyncStorage.setItem('savedPassword', password);
+        await AsyncStorage.setItem('rememberMe', 'true');
+      } else {
+        await AsyncStorage.removeItem('savedUsername');
+        await AsyncStorage.removeItem('savedPassword');
+        await AsyncStorage.setItem('rememberMe', 'false');
+      }
 
       if (role === 'Admin') {
         navigation.replace('AdminDashboard');
@@ -60,7 +83,6 @@ export default function LoginScreen({ navigation }) {
     } catch (err) {
       console.log('LOGIN ERROR STATUS:', err.response?.status);
       console.log('LOGIN ERROR DATA:', JSON.stringify(err.response?.data));
-      console.log('LOGIN ERROR URL:', err.config?.baseURL + err.config?.url);
       Alert.alert(
         'Login Failed',
         err.response?.data?.message ?? 'Invalid credentials. Please try again.'
@@ -92,17 +114,42 @@ export default function LoginScreen({ navigation }) {
             onChangeText={setUsername}
             placeholder="Enter your Username"
             placeholderTextColor="#383838"
+            autoCapitalize="none"
           />
 
           <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            placeholder="Enter your Password"
-            placeholderTextColor="#383838"
-          />
+          <View style={styles.passwordWrapper}>
+            <TextInput
+              style={styles.passwordInput}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              placeholder="Enter your Password"
+              placeholderTextColor="#383838"
+            />
+            <TouchableOpacity
+              style={styles.eyeIcon}
+              onPress={() => setShowPassword(prev => !prev)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons
+                name={showPassword ? 'eye-off' : 'eye'}
+                size={20}
+                color="#fff"
+              />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            style={styles.rememberRow}
+            onPress={() => setRememberMe(prev => !prev)}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+              {rememberMe && <Ionicons name="checkmark" size={14} color="#fff" />}
+            </View>
+            <Text style={styles.rememberText}>Remember me</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
@@ -167,6 +214,46 @@ const styles = StyleSheet.create({
     padding: 13,
     fontSize: 15,
     color: '#fff',
+  },
+  passwordWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.4)',
+    borderRadius: 8,
+  },
+  passwordInput: {
+    flex: 1,
+    padding: 13,
+    fontSize: 15,
+    color: '#fff',
+  },
+  eyeIcon: {
+    paddingHorizontal: 12,
+  },
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#fff',
+    marginRight: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#005f99',
+    borderColor: '#005f99',
+  },
+  rememberText: {
+    color: '#fff',
+    fontSize: 14,
   },
   button: {
     backgroundColor: '#005f99',

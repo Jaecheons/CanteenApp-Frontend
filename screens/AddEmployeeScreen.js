@@ -7,6 +7,7 @@ import {
 import api from '../services/api';
 
 const ROLES = ['Employee', 'Admin'];
+const USER_TYPES = ['Contractual Employee', 'Apprentice', 'Intern', 'Guest'];
 
 export default function AddEmployeeScreen({ navigation }) {
   const [name, setName] = useState('');
@@ -14,12 +15,16 @@ export default function AddEmployeeScreen({ navigation }) {
   const [department, setDepartment] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState('Employee');
+  const [userType, setUserType] = useState(null);
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const validate = () => {
-    if (!name.trim()) return 'Please enter the employee name.';
-    if (!username.trim()) return 'Please enter a username / Employee ID.';
+    if (!name.trim()) return 'Please enter the full name.';
+    if (!username.trim()) return 'Please enter a username.';
+    if (!phone.trim()) return 'Please enter a phone number.';
+    if (!/^\d{10}$/.test(phone.trim())) return 'Please enter a valid 10-digit phone number.';
+    if (!userType) return 'Please select a user type.';
     if (!password.trim()) return 'Please enter a password.';
     if (password.length < 4) return 'Password should be at least 4 characters.';
     return null;
@@ -32,7 +37,8 @@ export default function AddEmployeeScreen({ navigation }) {
     const payload = {
       name: name.trim(),
       username: username.trim(),
-      department: department.trim(),
+      department: department.trim() || null,
+      userType,
       phone: phone.trim(),
       role,
       password,
@@ -44,7 +50,9 @@ export default function AddEmployeeScreen({ navigation }) {
       const response = await api.post('/Users', payload);
       console.log('CREATE USER RESPONSE:', JSON.stringify(response.data));
 
-      Alert.alert('User Created! ✅', `${name.trim()} has been added as ${role}.`, [
+      const newUserID = response.data?.userID;
+
+      Alert.alert('User Created!', `${name.trim()} has been added as ${role}.${newUserID ? ` (ID: ${newUserID})` : ''}`, [
         {
           text: 'OK',
           onPress: () => {
@@ -53,6 +61,7 @@ export default function AddEmployeeScreen({ navigation }) {
             setDepartment('');
             setPhone('');
             setRole('Employee');
+            setUserType(null);
             setPassword('');
             navigation.goBack();
           }
@@ -69,7 +78,7 @@ export default function AddEmployeeScreen({ navigation }) {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Text style={styles.heading}>Add New User</Text>
-      <Text style={styles.subheading}>Create a login for an employee or admin.</Text>
+      <Text style={styles.subheading}>Create a login for an employee, contractor, intern, or guest.</Text>
 
       <Text style={styles.label}>Full Name</Text>
       <TextInput
@@ -79,12 +88,12 @@ export default function AddEmployeeScreen({ navigation }) {
         placeholder="e.g. Priya Sharma"
       />
 
-      <Text style={styles.label}>Username / Employee ID</Text>
+      <Text style={styles.label}>Username</Text>
       <TextInput
         style={styles.input}
         value={username}
         onChangeText={setUsername}
-        placeholder="e.g. 5 or priya.sharma"
+        placeholder="e.g. priya.sharma"
         autoCapitalize="none"
       />
 
@@ -96,14 +105,28 @@ export default function AddEmployeeScreen({ navigation }) {
         placeholder="e.g. HR"
       />
 
-      <Text style={styles.label}>Phone <Text style={styles.optionalTag}>(optional)</Text></Text>
+      <Text style={styles.label}>Phone Number</Text>
       <TextInput
         style={styles.input}
         value={phone}
         onChangeText={setPhone}
         placeholder="e.g. 9876543210"
         keyboardType="phone-pad"
+        maxLength={10}
       />
+
+      <Text style={styles.label}>User Type</Text>
+      <View style={styles.buttonRow}>
+        {USER_TYPES.map((t) => (
+          <TouchableOpacity
+            key={t}
+            style={[styles.optionBtn, userType === t && styles.optionBtnSelected]}
+            onPress={() => setUserType(t)}
+          >
+            <Text style={[styles.optionText, userType === t && styles.optionTextSelected]}>{t}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       <Text style={styles.label}>Role</Text>
       <View style={styles.buttonRow}>

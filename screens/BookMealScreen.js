@@ -50,6 +50,7 @@ export default function BookMealScreen({ navigation }) {
   const [specials, setSpecials] = useState([]);
   const [showSummary, setShowSummary] = useState(false);
   const [networkError, setNetworkError] = useState(false);
+  const [mealPricing, setMealPricing] = useState([]);
 
   const showCategorySection = CATEGORY_MEAL_TYPES.includes(mealType);
 
@@ -87,6 +88,12 @@ export default function BookMealScreen({ navigation }) {
   useEffect(() => {
     if (!showCategorySection) setMealCategory(null);
   }, [mealType]);
+
+  useEffect(() => {
+    api.get('/MealPricing')
+    .then((res) => setMealPricing(res.data ?? []))
+    .catch(() => setMealPricing([]));
+  }, []);
 
   // Check if cutoff might have passed (display hint only — backend enforces)
   const isTodaySelected = fromDate === formatDate(today);
@@ -197,6 +204,34 @@ export default function BookMealScreen({ navigation }) {
   };
 
   const summary = buildPayload();
+
+  const getEstimatedCost = () => {
+    if (!mealType) return null;
+    const pricing = mealPricing.find((p) => p.mealType === mealType);
+    if (!pricing) return null;
+    const base = pricing.baseCost ?? 0;
+    const paneerSurcharge = pricing.paneerSurcharge ?? 0;
+    const nonVegSurcharge = pricing.nonVegSurcharge ?? 0;
+    if (isSpecialMeal) return null; 
+    if (bookingFor === 'Self') {
+      if (!showCategorySection) return base;
+      if (mealCategory === 'Paneer') return base + paneerSurcharge;
+      if (mealCategory === 'Non-Veg') return base + nonVegSurcharge;
+      return base;
+    }
+
+  // Guests
+  if (!showCategorySection) {
+    const count = parseInt(guestCount) || 0;
+    return base * count;
+  }
+  const v = parseInt(vegCount) || 0;
+  const p = parseInt(paneerCount) || 0;
+  const n = parseInt(nonVegCount) || 0;
+  return (v * base) + (p * (base + paneerSurcharge)) + (n * (base + nonVegSurcharge));
+};
+
+const estimatedCost = getEstimatedCost();
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -494,7 +529,13 @@ export default function BookMealScreen({ navigation }) {
       </Modal>
     </ScrollView>
   );
-}
+  {estimatedCost !== null && (
+  <View style={styles.costBox}>
+    <Text style={styles.costLabel}>Estimated Cost</Text>
+    <Text style={styles.costValue}>₹{estimatedCost}</Text>
+    </View>
+    )}
+  }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
@@ -580,4 +621,10 @@ const styles = StyleSheet.create({
     alignItems: 'center', backgroundColor: '#005f99',
   },
   modalConfirmText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+  costBox: {
+    backgroundColor: '#005f99', borderRadius: 12,
+    padding: 16, marginTop: 20, alignItems: 'center',
+  },
+  costLabel: { fontSize: 12, color: '#cce5ff', marginBottom: 4 },
+  costValue: { fontSize: 24, fontWeight: 'bold', color: '#fff' },
 });

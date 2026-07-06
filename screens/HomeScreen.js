@@ -15,6 +15,7 @@ export default function HomeScreen({ navigation }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  
 
   const getDayName = () => {
     return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date().getDay()];
@@ -102,7 +103,7 @@ export default function HomeScreen({ navigation }) {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.greeting}>Hello, {name} 👋</Text>
+          <Text style={styles.greeting}>Hello, {name}</Text>
           <Text style={styles.date}>{getDayName()}, {new Date().toLocaleDateString()}</Text>
         </View>
         <View style={styles.headerIcons}>
@@ -155,17 +156,17 @@ export default function HomeScreen({ navigation }) {
       <Text style={styles.sectionTitle}>Quick Actions</Text>
 
       <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('Menu')}>
-        <Text style={styles.cardTitle}>📋 Weekly Menu</Text>
+        <Text style={styles.cardTitle}>Weekly Menu</Text>
         <Text style={styles.cardSub}>See what's being served this week</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('BookMeal')}>
-        <Text style={styles.cardTitle}>🍽 Book a Meal</Text>
+        <Text style={styles.cardTitle}>Book a Meal</Text>
         <Text style={styles.cardSub}>Place a new meal booking</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('MyBookings')}>
-        <Text style={styles.cardTitle}>📅 My Bookings</Text>
+        <Text style={styles.cardTitle}>My Bookings</Text>
         <Text style={styles.cardSub}>View and manage your bookings</Text>
       </TouchableOpacity>
 

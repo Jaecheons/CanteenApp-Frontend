@@ -18,6 +18,8 @@ import ProfileScreen from './screens/ProfileScreen';
 import NotificationsScreen from './screens/NotificationsScreen';
 import SendAnnouncementScreen from './screens/SendAnnouncementScreen';
 import AddEmployeeScreen from './screens/AddEmployeeScreen';
+import CollectionChecklistScreen from './screens/CollectionChecklistScreen';
+
 
 const Stack = createNativeStackNavigator();
 

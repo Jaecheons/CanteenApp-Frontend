@@ -128,7 +128,7 @@ export default function AdminDashboard({ navigation }) {
     if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
     const name = (b.employeeName ?? '').toLowerCase();
-    const id = String(b.employeeID ?? '');
+    const id = String(b.employeeID ?? b.newUserID ?? '');
     return name.includes(query) || id.includes(query);
   });
 
@@ -156,9 +156,17 @@ export default function AdminDashboard({ navigation }) {
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.heading}>Admin Dashboard</Text>
-            <TouchableOpacity onPress={handleLogout}>
-              <Text style={styles.logout}>Logout</Text>
-            </TouchableOpacity>
+            <View style={styles.headerActions}>
+              <TouchableOpacity
+                style={styles.profileBtn}
+                onPress={() => navigation.navigate('Profile')}
+              >
+                <Text style={styles.profileBtnText}>👤</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={handleLogout}>
+                <Text style={styles.logout}>Logout</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <Text style={styles.dateLabel}>📅 Today: {todayStr}</Text>
@@ -273,6 +281,13 @@ export default function AdminDashboard({ navigation }) {
             <Text style={styles.addUserBtnText}>👤 Add New User</Text>
           </TouchableOpacity>
 
+          <TouchableOpacity
+            style={styles.checklistBtn}
+            onPress={() => navigation.navigate('CollectionChecklist')}
+          >
+            <Text style={styles.checklistBtnText}>Collection Checklist</Text>
+          </TouchableOpacity>
+
           {/* Search Bar */}
           <Text style={styles.sectionLabel}>Search Bookings</Text>
           <View style={styles.searchBox}>
@@ -356,7 +371,7 @@ export default function AdminDashboard({ navigation }) {
           </View>
         </View>
         <Text style={styles.employeeName}>
-          {item.employeeName || `Employee #${item.employeeID}`}
+          {item.employeeName || `Employee #${item.employeeID ?? item.newUserID}`}
         </Text>
         <Text style={styles.mealType}>
           {item.isSpecialMeal ? '🌟 ' : ''}{item.mealType}
@@ -395,6 +410,7 @@ export default function AdminDashboard({ navigation }) {
             📍 {item.applicableOutlets?.join(', ')}
           </Text>
         </TouchableOpacity>
+
       ))}
     </View>
   );
@@ -434,6 +450,15 @@ const styles = StyleSheet.create({
     alignItems: 'center', marginTop: 50, marginBottom: 8,
   },
   heading: { fontSize: 22, fontWeight: 'bold', color: '#1a1a1a' },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  profileBtn: {
+    backgroundColor: '#005f99',
+    width: 34, height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileBtnText: { fontSize: 16 },
   logout: { fontSize: 14, color: '#005f99', fontWeight: '600' },
   dateLabel: { fontSize: 13, color: '#888', marginBottom: 12 },
   sectionLabel: {
@@ -570,4 +595,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24, borderRadius: 8,
   },
   btnText: { color: '#fff', fontWeight: '600' },
+
+  checklistBtn: {
+    backgroundColor: '#2c3e50', padding: 14,
+    borderRadius: 10, alignItems: 'center', marginBottom: 10,
+  },
+  checklistBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
 });
