@@ -91,6 +91,11 @@ export default function App() {
           component={AddEmployeeScreen}
           options={{ headerShown: true, title: 'Add New User' }}
         />
+        <Stack.Screen
+        name="CollectionChecklist"
+        component={CollectionChecklistScreen}
+        options={{ headerShown: true, title: 'Collection Checklist' }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );

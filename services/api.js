@@ -2,7 +2,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = 'https://provoke-factoid-crummiest.ngrok-free.dev/api';
+const BASE_URL = 'https://x5gcbztv-5084.inc1.devtunnels.ms/api';
 
 const api = axios.create({
   baseURL: BASE_URL,
