@@ -14,6 +14,29 @@ const STATUS_COLORS = {
 
 const FILTERS = ['All', 'Confirmed', 'Cancelled'];
 
+// Group individual booking rows (each = one meal) into cards by bookingGroupID.
+// Bookings without a bookingGroupID (older data) are treated as their own group.
+function groupBookings(bookings) {
+  const groups = new Map();
+  bookings.forEach((b) => {
+    const key = b.bookingGroupID ?? `single-${b.bookingID}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        bookingGroupID: b.bookingGroupID ?? null,
+        fromDate: b.fromDate,
+        toDate: b.toDate,
+        canteenLocation: b.canteenLocation,
+        bookingFor: b.bookingFor,
+        guestCount: b.guestCount,
+        userID: b.employeeID ?? b.newUserID,
+        meals: [],
+      });
+    }
+    groups.get(key).meals.push(b);
+  });
+  return Array.from(groups.values());
+}
+
 export default function MyBookingsScreen({ navigation }) {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -57,24 +80,35 @@ export default function MyBookingsScreen({ navigation }) {
     fetchBookings();
   };
 
-  // Filter bookings by status and search query
-  const filteredBookings = bookings.filter((b) => {
-    const matchesStatus =
-      statusFilter === 'All' ||
-      b.status?.toLowerCase() === statusFilter.toLowerCase();
+  const groupedAll = groupBookings(bookings);
 
+  // A group's overall status: confirmed if any meal in it is still confirmed
+  const groupStatus = (group) => {
+    const anyConfirmed = group.meals.some((m) => (m.status?.toLowerCase() ?? 'confirmed') === 'confirmed');
+    return anyConfirmed ? 'confirmed' : 'cancelled';
+  };
+
+  const groupTotalCost = (group) =>
+    group.meals.reduce((sum, m) => sum + (m.totalCost ?? 0), 0);
+
+  const groupCanModify = (group) => group.meals.some((m) => m.canModify);
+
+  // Filter groups by status and search query
+  const filteredGroups = groupedAll.filter((g) => {
+    const status = groupStatus(g);
+    const matchesStatus = statusFilter === 'All' || status === statusFilter.toLowerCase();
     if (!matchesStatus) return false;
 
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
-    const bookingIdStr = String(b.bookingID);
-    const mealType = (b.mealType ?? '').toLowerCase();
-    const outlet = (b.canteenLocation ?? '').toLowerCase();
-    const date = (b.fromDate ?? '').toLowerCase();
+    const outlet = (g.canteenLocation ?? '').toLowerCase();
+    const date = (g.fromDate ?? '').toLowerCase();
+    const mealTypes = g.meals.map((m) => (m.mealType ?? '').toLowerCase()).join(' ');
+    const bookingIds = g.meals.map((m) => String(m.bookingID)).join(' ');
 
     return (
-      bookingIdStr.includes(q) ||
-      mealType.includes(q) ||
+      bookingIds.includes(q) ||
+      mealTypes.includes(q) ||
       outlet.includes(q) ||
       date.includes(q)
     );
@@ -115,38 +149,61 @@ export default function MyBookingsScreen({ navigation }) {
     );
   }
 
-  const renderItem = ({ item }) => {
-    const status = item.status?.toLowerCase() ?? 'confirmed';
+  const renderItem = ({ item: group }) => {
+    const status = groupStatus(group);
     const statusColor = STATUS_COLORS[status] ?? '#888';
+    const totalCost = groupTotalCost(group);
+    const canModify = groupCanModify(group);
 
     return (
       <TouchableOpacity
         style={styles.card}
-        onPress={() => navigation.navigate('BookingDetail', { booking: item })}
+        onPress={() => navigation.navigate('BookingDetail', { group })}
       >
         <View style={styles.cardTop}>
-          <Text style={styles.bookingId}>#{item.bookingID}</Text>
+          <Text style={styles.bookingId}>
+            {group.bookingGroupID ? `Group #${String(group.bookingGroupID).slice(0, 8)}` : `#${group.meals[0].bookingID}`}
+          </Text>
           <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-            <Text style={styles.statusText}>{item.status}</Text>
+            <Text style={styles.statusText}>{status === 'confirmed' ? 'Confirmed' : 'Cancelled'}</Text>
           </View>
         </View>
 
-        <Text style={styles.mealType}>
-          {item.isSpecialMeal ? '🌟 ' : ''}{item.mealType}
-        </Text>
         <Text style={styles.dates}>
-          {item.fromDate?.split('T')[0]} → {item.toDate?.split('T')[0]}
+          {group.fromDate?.split('T')[0]} → {group.toDate?.split('T')[0]}
         </Text>
-        <Text style={styles.outlet}>📍 {item.canteenLocation}</Text>
+        <Text style={styles.outlet}>📍 {group.canteenLocation}</Text>
         <Text style={styles.bookedFor}>
-          {item.bookingFor === 'Guests'
-            ? `👥 Guests (${item.guestCount} persons)`
+          {group.bookingFor === 'Guests'
+            ? `👥 Guests (${group.guestCount} persons)`
             : '👤 Self'}
         </Text>
 
-        {item.canModify && (
-          <Text style={styles.modifyHint}>Tap to edit or cancel</Text>
-        )}
+        {/* Meal rows within the group */}
+        <View style={styles.mealList}>
+          {group.meals.map((m) => {
+            const mealStatus = m.status?.toLowerCase() ?? 'confirmed';
+            return (
+              <View key={m.bookingID} style={styles.mealRow}>
+                <Text style={styles.mealRowText}>
+                  {m.isSpecialMeal ? '🌟 ' : ''}{m.mealType}
+                  {mealStatus === 'cancelled' ? ' (cancelled)' : ''}
+                </Text>
+                <View style={styles.mealRowRight}>
+                  {m.isCollected && <Text style={styles.collectedTag}>✓ Collected</Text>}
+                  <Text style={styles.mealRowCost}>
+                    {m.totalCost != null ? `₹${m.totalCost}` : '—'}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+
+        <View style={styles.cardFooter}>
+          <Text style={styles.totalCostLabel}>Total: ₹{totalCost}</Text>
+          {canModify && <Text style={styles.modifyHint}>Tap to edit or cancel</Text>}
+        </View>
       </TouchableOpacity>
     );
   };
@@ -155,8 +212,8 @@ export default function MyBookingsScreen({ navigation }) {
     <FlatList
       style={styles.container}
       contentContainerStyle={styles.content}
-      data={filteredBookings}
-      keyExtractor={(item) => String(item.bookingID)}
+      data={filteredGroups}
+      keyExtractor={(item) => item.bookingGroupID ?? `single-${item.meals[0].bookingID}`}
       renderItem={renderItem}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#005f99']} />
@@ -205,7 +262,7 @@ export default function MyBookingsScreen({ navigation }) {
 
           {(searchQuery.length > 0 || statusFilter !== 'All') && (
             <Text style={styles.resultCount}>
-              {filteredBookings.length} booking{filteredBookings.length !== 1 ? 's' : ''} found
+              {filteredGroups.length} booking{filteredGroups.length !== 1 ? 's' : ''} found
             </Text>
           )}
         </View>
@@ -268,9 +325,25 @@ const styles = StyleSheet.create({
   bookingId: { fontSize: 13, fontWeight: 'bold', color: '#005f99' },
   statusBadge: { paddingVertical: 3, paddingHorizontal: 10, borderRadius: 20 },
   statusText: { color: '#fff', fontSize: 11, fontWeight: '600' },
-  mealType: { fontSize: 16, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 4 },
   dates: { fontSize: 13, color: '#555', marginBottom: 4 },
   outlet: { fontSize: 13, color: '#555', marginBottom: 4 },
-  bookedFor: { fontSize: 13, color: '#555' },
-  modifyHint: { fontSize: 12, color: '#005f99', marginTop: 8, fontWeight: '600' },
+  bookedFor: { fontSize: 13, color: '#555', marginBottom: 8 },
+  mealList: {
+    borderTopWidth: 1, borderTopColor: '#f0f0f0', marginTop: 4, paddingTop: 8,
+  },
+  mealRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', paddingVertical: 6,
+  },
+  mealRowText: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
+  mealRowRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  collectedTag: { fontSize: 11, color: '#27ae60', fontWeight: '600' },
+  mealRowCost: { fontSize: 13, color: '#555', fontWeight: '600' },
+  cardFooter: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginTop: 10,
+    borderTopWidth: 1, borderTopColor: '#f0f0f0', paddingTop: 10,
+  },
+  totalCostLabel: { fontSize: 14, fontWeight: 'bold', color: '#1a1a1a' },
+  modifyHint: { fontSize: 12, color: '#005f99', fontWeight: '600' },
 });

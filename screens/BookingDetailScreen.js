@@ -10,28 +10,42 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const OUTLETS = ['Central Canteen', 'Administrative Building', 'Central Control Room', 'Central Workshop'];
 const MEAL_CATEGORIES = ['Veg', 'Paneer', 'Non-Veg'];
 const CATEGORY_MEAL_TYPES = ['Lunch', 'Dinner'];
+const MEAL_TYPES = ['Breakfast', 'Lunch', 'Evening Snacks', 'Dinner'];
 
 const STATUS_COLORS = {
   confirmed: '#27ae60',
   cancelled: '#c0392b',
 };
 
+// Build editable per-meal state from a booking row
+function mealStateFromBooking(m) {
+  return {
+    bookingID: m.bookingID,
+    mealType: m.mealType,
+    originalStatus: m.status?.toLowerCase() ?? 'confirmed',
+    canModify: m.canModify,
+    isCollected: m.isCollected,
+    collectedAt: m.collectedAt,
+    totalCost: m.totalCost,
+    isSpecialMeal: m.isSpecialMeal,
+    // keep — whether this meal stays in the updated array (unchecking = cancel)
+    keep: (m.status?.toLowerCase() ?? 'confirmed') === 'confirmed',
+    mealCategory: m.vegCount > 0 ? 'Veg' : m.paneerCount > 0 ? 'Paneer' : m.nonVegCount > 0 ? 'Non-Veg' : null,
+    vegCount: String(m.vegCount ?? 0),
+    paneerCount: String(m.paneerCount ?? 0),
+    nonVegCount: String(m.nonVegCount ?? 0),
+    error: null,
+  };
+}
+
 export default function BookingDetailScreen({ route, navigation }) {
-  const { booking } = route.params;
+  const { group } = route.params;
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
-
-  const [outlet, setOutlet] = useState(booking.canteenLocation);
-  const [mealCategory, setMealCategory] = useState(
-    booking.vegCount > 0 ? 'Veg' : booking.paneerCount > 0 ? 'Paneer' : 'Non-Veg'
-  );
-  const [guestCount, setGuestCount] = useState(String(booking.guestCount ?? ''));
-  const [vegCount, setVegCount] = useState(String(booking.vegCount ?? 0));
-  const [paneerCount, setPaneerCount] = useState(String(booking.paneerCount ?? 0));
-  const [nonVegCount, setNonVegCount] = useState(String(booking.nonVegCount ?? 0));
-
+  const [outlet, setOutlet] = useState(group.canteenLocation);
+  const [guestCount, setGuestCount] = useState(String(group.guestCount ?? ''));
+  const [meals, setMeals] = useState(() => group.meals.map(mealStateFromBooking));
   const [loggedInName, setLoggedInName] = useState('');
 
   useEffect(() => {
@@ -40,58 +54,136 @@ export default function BookingDetailScreen({ route, navigation }) {
     });
   }, []);
 
-  const bookingId = booking.bookingID;
-  const status = booking.status?.toLowerCase() ?? 'confirmed';
-  const statusColor = STATUS_COLORS[status] ?? '#888';
+  const hasGroupID = !!group.bookingGroupID;
+  const anyConfirmed = meals.some((m) => m.originalStatus === 'confirmed');
+  const overallStatus = anyConfirmed ? 'confirmed' : 'cancelled';
+  const statusColor = STATUS_COLORS[overallStatus] ?? '#888';
+  const totalCost = meals.reduce((sum, m) => sum + (m.totalCost ?? 0), 0);
+  const anyEditable = meals.some((m) => m.canModify);
 
-  // Only show category for Lunch and Dinner
-  const showCategorySection = CATEGORY_MEAL_TYPES.includes(booking.mealType);
+  const updateMeal = (bookingID, patch) => {
+    setMeals((prev) => prev.map((m) => (m.bookingID === bookingID ? { ...m, ...patch } : m)));
+  };
 
-  const handleSave = async () => {
-    const payload = { canteenLocation: outlet };
+  const toggleKeep = (bookingID) => {
+    updateMeal(bookingID, { keep: !meals.find((m) => m.bookingID === bookingID).keep, error: null });
+  };
 
-    if (booking.bookingFor === 'Self' && !booking.isSpecialMeal) {
-      if (showCategorySection) {
-        payload.vegCount = mealCategory === 'Veg' ? 1 : 0;
-        payload.paneerCount = mealCategory === 'Paneer' ? 1 : 0;
-        payload.nonVegCount = mealCategory === 'Non-Veg' ? 1 : 0;
-      } else {
-        // Breakfast / Evening Snacks — default to veg
-        payload.vegCount = 1;
-        payload.paneerCount = 0;
-        payload.nonVegCount = 0;
+  const buildMealsPayload = () =>
+    meals
+      .filter((m) => m.keep)
+      .map((m) => {
+        const showCategorySection = CATEGORY_MEAL_TYPES.includes(m.mealType);
+        let vegCount = 0, paneerCount = 0, nonVegCount = 0;
+
+        if (m.isSpecialMeal) {
+          // leave zeros
+        } else if (group.bookingFor === 'Self') {
+          if (!showCategorySection) {
+            vegCount = 1;
+          } else {
+            vegCount = m.mealCategory === 'Veg' ? 1 : 0;
+            paneerCount = m.mealCategory === 'Paneer' ? 1 : 0;
+            nonVegCount = m.mealCategory === 'Non-Veg' ? 1 : 0;
+          }
+        } else {
+          // Guests
+          if (showCategorySection) {
+            vegCount = parseInt(m.vegCount) || 0;
+            paneerCount = parseInt(m.paneerCount) || 0;
+            nonVegCount = parseInt(m.nonVegCount) || 0;
+          }
+        }
+
+        return {
+          mealType: m.mealType,
+          vegCount,
+          paneerCount,
+          nonVegCount,
+          isSpecialMeal: m.isSpecialMeal,
+        };
+      });
+
+  const parseErrorsToMealMap = (errors) => {
+    const map = {};
+    errors.forEach((e) => {
+      const match = MEAL_TYPES.find((mt) => e.startsWith(`${mt}:`));
+      if (match) map[match] = e.slice(match.length + 1).trim();
+    });
+    return map;
+  };
+
+  const handleSaveGroup = async () => {
+    // Validate category selections for kept, non-special, category meals
+    for (const m of meals) {
+      if (!m.keep || m.isSpecialMeal) continue;
+      const showCategorySection = CATEGORY_MEAL_TYPES.includes(m.mealType);
+      if (!showCategorySection) continue;
+
+      if (group.bookingFor === 'Self' && !m.mealCategory) {
+        Alert.alert('Validation Error', `Please select a meal category for ${m.mealType}.`);
+        return;
+      }
+      if (group.bookingFor === 'Guests') {
+        const total = parseInt(guestCount) || 0;
+        const v = parseInt(m.vegCount) || 0;
+        const p = parseInt(m.paneerCount) || 0;
+        const n = parseInt(m.nonVegCount) || 0;
+        if (v + p + n !== total) {
+          Alert.alert('Validation Error', `${m.mealType}: Veg + Paneer + Non-Veg must equal total guest count.`);
+          return;
+        }
       }
     }
 
-    if (booking.bookingFor === 'Guests') {
-      const total = parseInt(guestCount) || 0;
+    const payload = { meals: buildMealsPayload() };
 
-      if (showCategorySection) {
-        const v = parseInt(vegCount) || 0;
-        const p = parseInt(paneerCount) || 0;
-        const n = parseInt(nonVegCount) || 0;
-
-        if (v + p + n !== total) {
-          Alert.alert('Validation Error', 'Veg + Paneer + Non-Veg must equal total guest count.');
-          return;
-        }
-
-        payload.guestCount = total;
-        payload.vegCount = v;
-        payload.paneerCount = p;
-        payload.nonVegCount = n;
+    try {
+      setSaving(true);
+      await api.put(`/Bookings/group/${group.bookingGroupID}`, payload);
+      setMeals((prev) => prev.map((m) => ({ ...m, error: null })));
+      Alert.alert('Updated!', 'Your booking has been updated.', [
+        { text: 'OK', onPress: () => navigation.goBack() }
+      ]);
+    } catch (err) {
+      const data = err.response?.data;
+      if (data?.errors?.length) {
+        const map = parseErrorsToMealMap(data.errors);
+        setMeals((prev) => prev.map((m) => ({ ...m, error: map[m.mealType] ?? null })));
+        Alert.alert(
+          data.message ?? 'Update failed.',
+          `${data.errors.join('\n')}\n\nLocked meals are highlighted below.`
+        );
       } else {
-        // Breakfast / Evening Snacks — just send total
-        payload.guestCount = total;
-        payload.vegCount = 0;
-        payload.paneerCount = 0;
-        payload.nonVegCount = 0;
+        Alert.alert('Error', data?.message ?? 'Could not update booking.');
       }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Fallback for legacy bookings that predate bookingGroupID
+  const handleSaveLegacy = async () => {
+    const single = meals[0];
+    const showCategorySection = CATEGORY_MEAL_TYPES.includes(single.mealType);
+    const payload = { canteenLocation: outlet };
+
+    if (group.bookingFor === 'Self' && !single.isSpecialMeal) {
+      payload.vegCount = showCategorySection ? (single.mealCategory === 'Veg' ? 1 : 0) : 1;
+      payload.paneerCount = showCategorySection ? (single.mealCategory === 'Paneer' ? 1 : 0) : 0;
+      payload.nonVegCount = showCategorySection ? (single.mealCategory === 'Non-Veg' ? 1 : 0) : 0;
+    }
+    if (group.bookingFor === 'Guests') {
+      const total = parseInt(guestCount) || 0;
+      payload.guestCount = total;
+      payload.vegCount = showCategorySection ? parseInt(single.vegCount) || 0 : 0;
+      payload.paneerCount = showCategorySection ? parseInt(single.paneerCount) || 0 : 0;
+      payload.nonVegCount = showCategorySection ? parseInt(single.nonVegCount) || 0 : 0;
     }
 
     try {
       setSaving(true);
-      await api.put(`/Bookings/${bookingId}`, payload);
+      await api.put(`/Bookings/${single.bookingID}`, payload);
       Alert.alert('Updated!', 'Your booking has been updated.', [
         { text: 'OK', onPress: () => navigation.goBack() }
       ]);
@@ -102,30 +194,7 @@ export default function BookingDetailScreen({ route, navigation }) {
     }
   };
 
-  const handleCancel = () => {
-    Alert.alert(
-      'Cancel Booking',
-      `Are you sure you want to cancel booking #${bookingId}?`,
-      [
-        { text: 'No', style: 'cancel' },
-        { text: 'Yes, Cancel', style: 'destructive', onPress: confirmCancel },
-      ]
-    );
-  };
-
-  const confirmCancel = async () => {
-    try {
-      setCancelling(true);
-      await api.delete(`/Bookings/${bookingId}`);
-      Alert.alert('Cancelled', 'Your booking has been cancelled.', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
-    } catch (err) {
-      Alert.alert('Error', err.response?.data?.message ?? 'Could not cancel booking.');
-    } finally {
-      setCancelling(false);
-    }
-  };
+  const handleSave = () => (hasGroupID ? handleSaveGroup() : handleSaveLegacy());
 
   const Row = ({ label, value }) => (
     <View style={styles.row}>
@@ -139,44 +208,60 @@ export default function BookingDetailScreen({ route, navigation }) {
 
       {/* Header */}
       <View style={styles.headerRow}>
-        <Text style={styles.heading}>Booking #{bookingId}</Text>
+        <Text style={styles.heading}>
+          {hasGroupID ? `Booking Group #${String(group.bookingGroupID).slice(0, 8)}` : `Booking #${meals[0].bookingID}`}
+        </Text>
         <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-          <Text style={styles.statusText}>{booking.status}</Text>
+          <Text style={styles.statusText}>{overallStatus === 'confirmed' ? 'Confirmed' : 'Cancelled'}</Text>
         </View>
       </View>
 
-      {/* Employee Details */}
-      <Text style={styles.sectionLabel}>Employee Details</Text>
+      {/* User Details */}
+      <Text style={styles.sectionLabel}>Booked By</Text>
       <View style={styles.card}>
-        <Row label="Employee ID" value={String(booking.employeeID ?? '—')} />
-        <Row label="Employee Name" value={booking.employeeName || loggedInName || '—'} />
+        <Row label="User ID" value={String(group.userID ?? '—')} />
+        <Row label="Name" value={loggedInName || '—'} />
       </View>
 
       {/* Booking Details */}
       <Text style={styles.sectionLabel}>Booking Details</Text>
       <View style={styles.card}>
-        <Row
-        label="Meal Type"
-        value={booking.isSpecialMeal
-          ? `🌟 ${booking.mealType} (Special)`
-          : booking.mealType}
-          />
-          <Row label="From Date" value={booking.fromDate?.split('T')[0]} />
-          <Row label="To Date" value={booking.toDate?.split('T')[0]} />
-          <Row label="Outlet" value={booking.canteenLocation} />
-          <Row label="Booked For" value={booking.bookingFor} />
-          {booking.bookingFor === 'Guests' && (
-            <Row label="Total Guests" value={String(booking.guestCount)} />
-            )}
-            <Row label="Cost" value={booking.totalCost != null ? `₹${booking.totalCost}` : '—'} />
-            <Row
-            label="Collected"
-            value={booking.isCollected ? `Yes${booking.collectedAt ? ' · ' + booking.collectedAt.split('T')[0] : ''}` : 'Not yet'}
-            />
-            </View>
+        <Row label="From Date" value={group.fromDate?.split('T')[0]} />
+        <Row label="To Date" value={group.toDate?.split('T')[0]} />
+        <Row label="Outlet" value={group.canteenLocation} />
+        <Row label="Booked For" value={group.bookingFor} />
+        {group.bookingFor === 'Guests' && (
+          <Row label="Total Guests" value={String(group.guestCount)} />
+        )}
+        <Row label="Total Cost" value={`₹${totalCost}`} />
+      </View>
 
-      {/* Editable fields — only if canModify */}
-      {booking.canModify && (
+      {/* Meals in this booking */}
+      <Text style={styles.sectionLabel}>Meals</Text>
+      <View style={styles.card}>
+        {meals.map((m, idx) => (
+          <View key={m.bookingID} style={[styles.mealRow, idx === meals.length - 1 && styles.mealRowLast]}>
+            <View style={styles.mealRowTop}>
+              <Text style={styles.mealRowTitle}>
+                {m.isSpecialMeal ? `🌟 ${m.mealType} (Special)` : m.mealType}
+              </Text>
+              <Text style={[styles.mealStatusTag, { color: m.originalStatus === 'cancelled' ? '#c0392b' : '#27ae60' }]}>
+                {m.originalStatus === 'cancelled' ? 'Cancelled' : 'Confirmed'}
+              </Text>
+            </View>
+            <Text style={styles.mealSubText}>
+              {m.totalCost != null ? `₹${m.totalCost}` : '—'} ·{' '}
+              {m.isCollected ? `Collected${m.collectedAt ? ' · ' + m.collectedAt.split('T')[0] : ''}` : 'Not yet collected'}
+            </Text>
+            {!m.canModify && m.originalStatus === 'confirmed' && (
+              <Text style={styles.lockedText}>🔒 Cutoff passed — locked</Text>
+            )}
+          </View>
+        ))}
+      </View>
+
+      {/* Editable section */}
+      {anyEditable && (
         <>
           <View style={styles.editHeader}>
             <Text style={styles.sectionTitle}>Edit Booking</Text>
@@ -187,41 +272,31 @@ export default function BookingDetailScreen({ route, navigation }) {
 
           {editing && (
             <View style={styles.card}>
+              {hasGroupID && (
+                <Text style={styles.hint}>
+                  Uncheck a meal to cancel it. Locked meals (cutoff passed) can't be changed.
+                </Text>
+              )}
 
-              {/* Outlet */}
-              <Text style={styles.fieldLabel}>Canteen Outlet</Text>
-              <View style={styles.buttonRow}>
-                {OUTLETS.map((o) => (
-                  <TouchableOpacity
-                    key={o}
-                    style={[styles.optionBtn, outlet === o && styles.optionBtnSelected]}
-                    onPress={() => setOutlet(o)}
-                  >
-                    <Text style={[styles.optionText, outlet === o && styles.optionTextSelected]}>{o}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Meal Category — Self, not special, Lunch/Dinner only */}
-              {booking.bookingFor === 'Self' && !booking.isSpecialMeal && showCategorySection && (
+              {/* Outlet — legacy single-booking edit only */}
+              {!hasGroupID && (
                 <>
-                  <Text style={styles.fieldLabel}>Meal Category</Text>
+                  <Text style={styles.fieldLabel}>Canteen Outlet</Text>
                   <View style={styles.buttonRow}>
-                    {MEAL_CATEGORIES.map((c) => (
+                    {OUTLETS.map((o) => (
                       <TouchableOpacity
-                        key={c}
-                        style={[styles.optionBtn, mealCategory === c && styles.optionBtnSelected]}
-                        onPress={() => setMealCategory(c)}
+                        key={o}
+                        style={[styles.optionBtn, outlet === o && styles.optionBtnSelected]}
+                        onPress={() => setOutlet(o)}
                       >
-                        <Text style={[styles.optionText, mealCategory === c && styles.optionTextSelected]}>{c}</Text>
+                        <Text style={[styles.optionText, outlet === o && styles.optionTextSelected]}>{o}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 </>
               )}
 
-              {/* Guest counts */}
-              {booking.bookingFor === 'Guests' && (
+              {group.bookingFor === 'Guests' && (
                 <>
                   <Text style={styles.fieldLabel}>Total Persons</Text>
                   <TextInput
@@ -230,20 +305,69 @@ export default function BookingDetailScreen({ route, navigation }) {
                     onChangeText={setGuestCount}
                     keyboardType="numeric"
                   />
-
-                  {/* Veg/Paneer/Non-Veg only for Lunch and Dinner */}
-                  {showCategorySection && (
-                    <>
-                      <Text style={styles.fieldLabel}>Veg Count</Text>
-                      <TextInput style={styles.input} value={vegCount} onChangeText={setVegCount} keyboardType="numeric" />
-                      <Text style={styles.fieldLabel}>Paneer Count</Text>
-                      <TextInput style={styles.input} value={paneerCount} onChangeText={setPaneerCount} keyboardType="numeric" />
-                      <Text style={styles.fieldLabel}>Non-Veg Count</Text>
-                      <TextInput style={styles.input} value={nonVegCount} onChangeText={setNonVegCount} keyboardType="numeric" />
-                    </>
-                  )}
                 </>
               )}
+
+              {meals.map((m) => {
+                const showCategorySection = CATEGORY_MEAL_TYPES.includes(m.mealType);
+                const locked = !m.canModify;
+
+                return (
+                  <View key={m.bookingID} style={[styles.editMealCard, locked && styles.editMealCardLocked, m.error && styles.editMealCardError]}>
+                    <View style={styles.editMealHeader}>
+                      {hasGroupID ? (
+                        <TouchableOpacity
+                          style={styles.mealCheckboxRow}
+                          onPress={() => !locked && toggleKeep(m.bookingID)}
+                          disabled={locked}
+                        >
+                          <View style={[styles.checkbox, m.keep && styles.checkboxChecked, locked && styles.checkboxDisabled]}>
+                            {m.keep && <Text style={styles.checkboxTick}>✓</Text>}
+                          </View>
+                          <Text style={styles.editMealTitle}>{m.mealType}</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <Text style={styles.editMealTitle}>{m.mealType}</Text>
+                      )}
+                      {locked && <Text style={styles.lockedTag}>Locked</Text>}
+                    </View>
+
+                    {m.error && <Text style={styles.mealErrorText}>⚠ {m.error}</Text>}
+
+                    {m.keep && !locked && !m.isSpecialMeal && (
+                      <>
+                        {group.bookingFor === 'Self' && showCategorySection && (
+                          <>
+                            <Text style={styles.fieldLabel}>Meal Category</Text>
+                            <View style={styles.buttonRow}>
+                              {MEAL_CATEGORIES.map((c) => (
+                                <TouchableOpacity
+                                  key={c}
+                                  style={[styles.optionBtn, m.mealCategory === c && styles.optionBtnSelected]}
+                                  onPress={() => updateMeal(m.bookingID, { mealCategory: c })}
+                                >
+                                  <Text style={[styles.optionText, m.mealCategory === c && styles.optionTextSelected]}>{c}</Text>
+                                </TouchableOpacity>
+                              ))}
+                            </View>
+                          </>
+                        )}
+
+                        {group.bookingFor === 'Guests' && showCategorySection && (
+                          <>
+                            <Text style={styles.fieldLabel}>Veg Count</Text>
+                            <TextInput style={styles.input} value={m.vegCount} onChangeText={(v) => updateMeal(m.bookingID, { vegCount: v })} keyboardType="numeric" />
+                            <Text style={styles.fieldLabel}>Paneer Count</Text>
+                            <TextInput style={styles.input} value={m.paneerCount} onChangeText={(v) => updateMeal(m.bookingID, { paneerCount: v })} keyboardType="numeric" />
+                            <Text style={styles.fieldLabel}>Non-Veg Count</Text>
+                            <TextInput style={styles.input} value={m.nonVegCount} onChangeText={(v) => updateMeal(m.bookingID, { nonVegCount: v })} keyboardType="numeric" />
+                          </>
+                        )}
+                      </>
+                    )}
+                  </View>
+                );
+              })}
 
               {/* Save Button */}
               <TouchableOpacity
@@ -258,24 +382,12 @@ export default function BookingDetailScreen({ route, navigation }) {
               </TouchableOpacity>
             </View>
           )}
-
-          {/* Cancel Booking */}
-          <TouchableOpacity
-            style={[styles.cancelBtn, cancelling && styles.btnDisabled]}
-            onPress={handleCancel}
-            disabled={cancelling}
-          >
-            {cancelling
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.cancelText}>Cancel Booking</Text>
-            }
-          </TouchableOpacity>
         </>
       )}
 
-      {!booking.canModify && (
+      {!anyEditable && (
         <Text style={styles.cannotModify}>
-          {status === 'cancelled'
+          {overallStatus === 'cancelled'
             ? 'This booking has been cancelled.'
             : 'This booking can no longer be modified.'}
         </Text>
@@ -291,7 +403,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', marginBottom: 20,
   },
-  heading: { fontSize: 20, fontWeight: 'bold', color: '#1a1a1a' },
+  heading: { fontSize: 18, fontWeight: 'bold', color: '#1a1a1a', flex: 1, marginRight: 8 },
   statusBadge: { paddingVertical: 4, paddingHorizontal: 12, borderRadius: 20 },
   statusText: { color: '#fff', fontSize: 12, fontWeight: '600' },
   sectionLabel: {
@@ -309,12 +421,20 @@ const styles = StyleSheet.create({
   },
   rowLabel: { fontSize: 14, color: '#888', fontWeight: '500' },
   rowValue: { fontSize: 14, color: '#1a1a1a', fontWeight: '600', maxWidth: '60%', textAlign: 'right' },
+  mealRow: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  mealRowLast: { borderBottomWidth: 0 },
+  mealRowTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  mealRowTitle: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
+  mealStatusTag: { fontSize: 12, fontWeight: '600' },
+  mealSubText: { fontSize: 12, color: '#888', marginTop: 4 },
+  lockedText: { fontSize: 12, color: '#c0392b', marginTop: 4, fontWeight: '600' },
   editHeader: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', marginBottom: 10,
   },
   sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#1a1a1a' },
   editToggle: { fontSize: 14, color: '#005f99', fontWeight: '600' },
+  hint: { fontSize: 12, color: '#888', marginBottom: 12 },
   fieldLabel: { fontSize: 13, fontWeight: '600', color: '#333', marginTop: 14, marginBottom: 6 },
   buttonRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   optionBtn: {
@@ -328,16 +448,32 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5', borderWidth: 1, borderColor: '#ddd',
     borderRadius: 8, padding: 12, fontSize: 15, marginBottom: 4,
   },
+  editMealCard: {
+    borderWidth: 1, borderColor: '#eee', borderRadius: 10,
+    padding: 12, marginTop: 12,
+  },
+  editMealCardLocked: { backgroundColor: '#f5f5f5' },
+  editMealCardError: { borderColor: '#c0392b', backgroundColor: '#fdecea' },
+  editMealHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  mealCheckboxRow: { flexDirection: 'row', alignItems: 'center' },
+  checkbox: {
+    width: 20, height: 20, borderRadius: 5, borderWidth: 2, borderColor: '#aaa',
+    alignItems: 'center', justifyContent: 'center', marginRight: 8,
+  },
+  checkboxChecked: { backgroundColor: '#005f99', borderColor: '#005f99' },
+  checkboxDisabled: { borderColor: '#ddd' },
+  checkboxTick: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+  editMealTitle: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
+  lockedTag: {
+    fontSize: 11, color: '#c0392b', backgroundColor: '#fdecea',
+    paddingVertical: 3, paddingHorizontal: 8, borderRadius: 10, fontWeight: '600',
+  },
+  mealErrorText: { color: '#c0392b', fontSize: 12, fontWeight: '600', marginTop: 8 },
   saveBtn: {
     backgroundColor: '#27ae60', padding: 14,
     borderRadius: 10, alignItems: 'center', marginTop: 16,
   },
   saveBtnText: { color: '#fff', fontSize: 15, fontWeight: 'bold' },
-  cancelBtn: {
-    backgroundColor: '#c0392b', padding: 16,
-    borderRadius: 10, alignItems: 'center', marginTop: 8,
-  },
-  cancelText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
   btnDisabled: { backgroundColor: '#aaa' },
   cannotModify: { textAlign: 'center', color: '#888', fontSize: 14, marginTop: 10 },
 });
