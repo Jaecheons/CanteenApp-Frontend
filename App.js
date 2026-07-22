@@ -19,6 +19,7 @@ import NotificationsScreen from './screens/NotificationsScreen';
 import SendAnnouncementScreen from './screens/SendAnnouncementScreen';
 import AddEmployeeScreen from './screens/AddEmployeeScreen';
 import CollectionChecklistScreen from './screens/CollectionChecklistScreen';
+import ManageAddOnsScreen from './screens/ManageAddOnsScreen';
 
 
 const Stack = createNativeStackNavigator();
@@ -92,9 +93,14 @@ export default function App() {
           options={{ headerShown: true, title: 'Add New User' }}
         />
         <Stack.Screen
-        name="CollectionChecklist"
-        component={CollectionChecklistScreen}
-        options={{ headerShown: true, title: 'Collection Checklist' }}
+          name="CollectionChecklist"
+          component={CollectionChecklistScreen}
+          options={{ headerShown: true, title: 'Collection Checklist' }}
+        />
+        <Stack.Screen
+          name="ManageAddOns"
+          component={ManageAddOnsScreen}
+          options={{ headerShown: true, title: 'Manage Add-Ons' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

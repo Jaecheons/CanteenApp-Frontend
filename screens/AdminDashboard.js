@@ -278,7 +278,7 @@ export default function AdminDashboard({ navigation }) {
             style={styles.addUserBtn}
             onPress={() => navigation.navigate('AddEmployee')}
           >
-            <Text style={styles.addUserBtnText}>👤 Add New User</Text>
+            <Text style={styles.addUserBtnText}>Add New User</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -286,6 +286,13 @@ export default function AdminDashboard({ navigation }) {
             onPress={() => navigation.navigate('CollectionChecklist')}
           >
             <Text style={styles.checklistBtnText}>Collection Checklist</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.manageAddOnsBtn}
+            onPress={() => navigation.navigate('ManageAddOns')}
+          >
+            <Text style={styles.manageAddOnsBtnText}>Manage Add-Ons</Text>
           </TouchableOpacity>
 
           {/* Search Bar */}
@@ -533,7 +540,7 @@ const styles = StyleSheet.create({
   announceBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
   addUserBtn: {
     backgroundColor: '#16a085', padding: 14,
-    borderRadius: 10, alignItems: 'center', marginBottom: 20,
+    borderRadius: 10, alignItems: 'center', marginBottom: 10,
   },
   addUserBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
   searchBox: {
@@ -543,6 +550,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, marginBottom: 8,
     elevation: 1,
   },
+
+  manageAddOnsBtn: {
+    backgroundColor: '#8e44ad', padding: 14,
+    borderRadius: 10, alignItems: 'center', marginBottom: 20,
+  },
+  manageAddOnsBtnText: { color: '#fff', fontWeight: 'bold', fontSize: 15 },
+
   searchIcon: { fontSize: 16, marginRight: 8 },
   searchInput: {
     flex: 1, paddingVertical: 12,

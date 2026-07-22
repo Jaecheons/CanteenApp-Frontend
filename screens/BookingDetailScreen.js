@@ -34,6 +34,11 @@ function mealStateFromBooking(m) {
     vegCount: String(m.vegCount ?? 0),
     paneerCount: String(m.paneerCount ?? 0),
     nonVegCount: String(m.nonVegCount ?? 0),
+    addOns: m.addOns ?? [],
+    addOnQuantities: (m.addOns ?? []).reduce((acc, a) => {
+      acc[a.addOnID] = String(a.quantity);
+      return acc;
+    }, {}),
     error: null,
   };
 }
@@ -47,11 +52,18 @@ export default function BookingDetailScreen({ route, navigation }) {
   const [guestCount, setGuestCount] = useState(String(group.guestCount ?? ''));
   const [meals, setMeals] = useState(() => group.meals.map(mealStateFromBooking));
   const [loggedInName, setLoggedInName] = useState('');
+  const [availableAddOns, setAvailableAddOns] = useState([]);
 
   useEffect(() => {
     AsyncStorage.getItem('name').then((n) => {
       if (n) setLoggedInName(n);
     });
+  }, []);
+
+  useEffect(() => {
+    api.get('/AddOns')
+      .then((res) => setAvailableAddOns(res.data ?? []))
+      .catch(() => setAvailableAddOns([]));
   }, []);
 
   const hasGroupID = !!group.bookingGroupID;
@@ -67,6 +79,26 @@ export default function BookingDetailScreen({ route, navigation }) {
 
   const toggleKeep = (bookingID) => {
     updateMeal(bookingID, { keep: !meals.find((m) => m.bookingID === bookingID).keep, error: null });
+  };
+
+  const updateAddOnQuantity = (bookingID, addOnID, qty) => {
+    setMeals((prev) => prev.map((m) =>
+      m.bookingID === bookingID
+        ? { ...m, addOnQuantities: { ...m.addOnQuantities, [addOnID]: qty } }
+        : m
+    ));
+  };
+
+  // Editable add-on options for a meal = currently-available add-ons, plus any
+  // add-on already on this booking even if it's since been disabled.
+  const addOnOptionsFor = (m) => {
+    const options = [...availableAddOns];
+    m.addOns.forEach((a) => {
+      if (!options.some((o) => o.addOnID === a.addOnID)) {
+        options.push({ addOnID: a.addOnID, name: a.name, costPerUnit: a.costPerUnit, isAvailable: false });
+      }
+    });
+    return options;
   };
 
   const buildMealsPayload = () =>
@@ -95,12 +127,17 @@ export default function BookingDetailScreen({ route, navigation }) {
           }
         }
 
+        const mealAddOns = Object.entries(m.addOnQuantities)
+          .map(([addOnID, qty]) => ({ addOnID: parseInt(addOnID), quantity: parseInt(qty) || 0 }))
+          .filter((a) => a.quantity > 0);
+
         return {
           mealType: m.mealType,
           vegCount,
           paneerCount,
           nonVegCount,
           isSpecialMeal: m.isSpecialMeal,
+          addOns: mealAddOns,
         };
       });
 
@@ -253,6 +290,15 @@ export default function BookingDetailScreen({ route, navigation }) {
               {m.totalCost != null ? `₹${m.totalCost}` : '—'} ·{' '}
               {m.isCollected ? `Collected${m.collectedAt ? ' · ' + m.collectedAt.split('T')[0] : ''}` : 'Not yet collected'}
             </Text>
+            {m.addOns.length > 0 && (
+              <View style={styles.addOnDisplayList}>
+                {m.addOns.map((a) => (
+                  <Text key={a.addOnID} style={styles.addOnDisplayLine}>
+                    {a.name} × {a.quantity} — ₹{a.totalCost}
+                  </Text>
+                ))}
+              </View>
+            )}
             {!m.canModify && m.originalStatus === 'confirmed' && (
               <Text style={styles.lockedText}>🔒 Cutoff passed — locked</Text>
             )}
@@ -363,6 +409,47 @@ export default function BookingDetailScreen({ route, navigation }) {
                             <TextInput style={styles.input} value={m.nonVegCount} onChangeText={(v) => updateMeal(m.bookingID, { nonVegCount: v })} keyboardType="numeric" />
                           </>
                         )}
+
+                        {addOnOptionsFor(m).length > 0 && (
+                          <>
+                            <Text style={styles.fieldLabel}>Add-Ons</Text>
+                            {addOnOptionsFor(m).map((addOn) => {
+                              const qty = m.addOnQuantities[addOn.addOnID] ?? '';
+                              const qtyNum = parseInt(qty) || 0;
+                              return (
+                                <View key={addOn.addOnID} style={styles.addOnRow}>
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={styles.addOnName}>
+                                      {addOn.name}{!addOn.isAvailable ? ' (no longer offered)' : ''}
+                                    </Text>
+                                    <Text style={styles.addOnPrice}>₹{addOn.costPerUnit} each</Text>
+                                  </View>
+                                  <View style={styles.stepperRow}>
+                                    <TouchableOpacity
+                                      style={styles.stepperBtn}
+                                      onPress={() => updateAddOnQuantity(m.bookingID, addOn.addOnID, String(Math.max(0, qtyNum - 1)))}
+                                    >
+                                      <Text style={styles.stepperBtnText}>−</Text>
+                                    </TouchableOpacity>
+                                    <TextInput
+                                      style={styles.stepperInput}
+                                      value={qty}
+                                      onChangeText={(v) => updateAddOnQuantity(m.bookingID, addOn.addOnID, v)}
+                                      keyboardType="numeric"
+                                      placeholder="0"
+                                    />
+                                    <TouchableOpacity
+                                      style={styles.stepperBtn}
+                                      onPress={() => updateAddOnQuantity(m.bookingID, addOn.addOnID, String(qtyNum + 1))}
+                                    >
+                                      <Text style={styles.stepperBtnText}>+</Text>
+                                    </TouchableOpacity>
+                                  </View>
+                                </View>
+                              );
+                            })}
+                          </>
+                        )}
                       </>
                     )}
                   </View>
@@ -428,6 +515,24 @@ const styles = StyleSheet.create({
   mealStatusTag: { fontSize: 12, fontWeight: '600' },
   mealSubText: { fontSize: 12, color: '#888', marginTop: 4 },
   lockedText: { fontSize: 12, color: '#c0392b', marginTop: 4, fontWeight: '600' },
+  addOnDisplayList: { marginTop: 4 },
+  addOnDisplayLine: { fontSize: 12, color: '#555', marginTop: 2 },
+  addOnRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
+  },
+  addOnName: { fontSize: 13, color: '#1a1a1a', fontWeight: '600' },
+  addOnPrice: { fontSize: 11, color: '#888', marginTop: 2 },
+  stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  stepperBtn: {
+    width: 28, height: 28, borderRadius: 6, backgroundColor: '#e8f4fd',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  stepperBtnText: { fontSize: 16, color: '#005f99', fontWeight: 'bold' },
+  stepperInput: {
+    width: 40, textAlign: 'center', backgroundColor: '#fff',
+    borderWidth: 1, borderColor: '#ddd', borderRadius: 6, paddingVertical: 4, fontSize: 14,
+  },
   editHeader: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', marginBottom: 10,

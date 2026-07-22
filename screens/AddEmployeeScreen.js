@@ -1,4 +1,4 @@
-// screens/AddEmployeeScreen.js
+// screens/AddEmployeeScreen.js - To add New User (Employee, Contractor, Intern, Guest) with login credentials
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,

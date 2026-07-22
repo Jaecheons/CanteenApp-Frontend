@@ -184,17 +184,28 @@ export default function MyBookingsScreen({ navigation }) {
           {group.meals.map((m) => {
             const mealStatus = m.status?.toLowerCase() ?? 'confirmed';
             return (
-              <View key={m.bookingID} style={styles.mealRow}>
-                <Text style={styles.mealRowText}>
-                  {m.isSpecialMeal ? '🌟 ' : ''}{m.mealType}
-                  {mealStatus === 'cancelled' ? ' (cancelled)' : ''}
-                </Text>
-                <View style={styles.mealRowRight}>
-                  {m.isCollected && <Text style={styles.collectedTag}>✓ Collected</Text>}
-                  <Text style={styles.mealRowCost}>
-                    {m.totalCost != null ? `₹${m.totalCost}` : '—'}
+              <View key={m.bookingID}>
+                <View style={styles.mealRow}>
+                  <Text style={styles.mealRowText}>
+                    {m.isSpecialMeal ? '🌟 ' : ''}{m.mealType}
+                    {mealStatus === 'cancelled' ? ' (cancelled)' : ''}
                   </Text>
+                  <View style={styles.mealRowRight}>
+                    {m.isCollected && <Text style={styles.collectedTag}>✓ Collected</Text>}
+                    <Text style={styles.mealRowCost}>
+                      {m.totalCost != null ? `₹${m.totalCost}` : '—'}
+                    </Text>
+                  </View>
                 </View>
+                {m.addOns?.length > 0 && (
+                  <View style={styles.addOnDisplayList}>
+                    {m.addOns.map((a) => (
+                      <Text key={a.addOnID} style={styles.addOnDisplayLine}>
+                        {a.name} × {a.quantity} — ₹{a.totalCost}
+                      </Text>
+                    ))}
+                  </View>
+                )}
               </View>
             );
           })}
@@ -339,6 +350,8 @@ const styles = StyleSheet.create({
   mealRowRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   collectedTag: { fontSize: 11, color: '#27ae60', fontWeight: '600' },
   mealRowCost: { fontSize: 13, color: '#555', fontWeight: '600' },
+  addOnDisplayList: { paddingLeft: 8, marginBottom: 4 },
+  addOnDisplayLine: { fontSize: 12, color: '#888', marginTop: 1 },
   cardFooter: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', marginTop: 10,
