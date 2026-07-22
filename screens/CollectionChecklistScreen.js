@@ -25,6 +25,17 @@ export default function CollectionChecklistScreen() {
   const [selectedDate, setSelectedDate] = useState(formatDate(new Date()));
   const [updatingId, setUpdatingId] = useState(null);
 
+  const OUTLETS = [
+    'All',
+    'Central Canteen',
+    'Administrative Building',
+    'Central Control Room',
+    'Central Workshop',
+  ];
+
+  const [selectedOutlet, setSelectedOutlet] = useState('All');
+  
+
   const fetchBookings = async () => {
     try {
       const response = await api.get('/Bookings');
@@ -51,12 +62,18 @@ export default function CollectionChecklistScreen() {
     fetchBookings();
   };
 
-  const dayBookings = bookings.filter(
-    (b) =>
+  const dayBookings = bookings.filter((b) => {
+    const matchesDate =
       b.status?.toLowerCase() === 'confirmed' &&
       b.fromDate?.split('T')[0] <= selectedDate &&
-      b.toDate?.split('T')[0] >= selectedDate
-  );
+      b.toDate?.split('T')[0] >= selectedDate;
+
+    const matchesOutlet =
+      selectedOutlet === 'All' ||
+      b.canteenLocation === selectedOutlet;
+
+    return matchesDate && matchesOutlet;
+  });
 
   const toggleCollected = async (booking) => {
 
@@ -202,6 +219,28 @@ export default function CollectionChecklistScreen() {
             <Text style={styles.todayBtnText}>Go to Today</Text>
           </TouchableOpacity>
 
+          <View style={styles.filterRow}>
+            {OUTLETS.map((outlet) => (
+              <TouchableOpacity
+                key={outlet}
+                style={[
+                  styles.filterChip,
+                  selectedOutlet === outlet && styles.filterChipActive,
+                ]}
+                onPress={() => setSelectedOutlet(outlet)}
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    selectedOutlet === outlet && styles.filterChipTextActive,
+                  ]}
+                >
+                  {outlet}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           {/* Day summary */}
           <View style={styles.statsRow}>
             <View style={styles.statCard}>
@@ -305,5 +344,31 @@ const styles = StyleSheet.create({
   btn: {
     backgroundColor: '#005f99', paddingVertical: 10,
     paddingHorizontal: 24, borderRadius: 8,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  filterChip: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  filterChipActive: {
+    backgroundColor: '#005f99',
+    borderColor: '#005f99',
+  },
+  filterChipText: {
+    color: '#555',
+    fontSize: 12,
+  },
+  filterChipTextActive: {
+    color: '#fff',
+    fontWeight: '600',
   },
 });

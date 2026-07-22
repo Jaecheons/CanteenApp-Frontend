@@ -6,6 +6,8 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import api from '../services/api';
+import usePagination from '../hooks/usePagination';
+import PaginationControls from '../components/PaginationControls';
 
 const STATUS_COLORS = {
   confirmed: '#27ae60',
@@ -13,6 +15,17 @@ const STATUS_COLORS = {
 };
 
 const FILTERS = ['All', 'Confirmed', 'Cancelled'];
+
+// Inclusive day count between two date strings — used to label multi-day
+// bookings clearly, matching the labeling added on the booking creation screen.
+function getGroupDayCount(group) {
+  if (!group.fromDate || !group.toDate) return 1;
+  const start = new Date(group.fromDate);
+  const end = new Date(group.toDate);
+  const diffMs = end.getTime() - start.getTime();
+  const days = Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1;
+  return days > 0 ? days : 1;
+}
 
 // Group individual booking rows (each = one meal) into cards by bookingGroupID.
 // Bookings without a bookingGroupID (older data) are treated as their own group.
@@ -80,6 +93,16 @@ export default function MyBookingsScreen({ navigation }) {
     fetchBookings();
   };
 
+  const handleSearchChange = (text) => {
+    setSearchQuery(text);
+    pagination.resetPage();
+  };
+
+  const handleFilterChange = (filter) => {
+    setStatusFilter(filter);
+    pagination.resetPage();
+  };
+
   const groupedAll = groupBookings(bookings);
 
   // A group's overall status: confirmed if any meal in it is still confirmed
@@ -89,7 +112,7 @@ export default function MyBookingsScreen({ navigation }) {
   };
 
   const groupTotalCost = (group) =>
-    group.meals.reduce((sum, m) => sum + (m.totalCost ?? 0), 0);
+    group.meals.reduce((sum, m) => sum + (m.totalCost ?? 0), 0) * getGroupDayCount(group);
 
   const groupCanModify = (group) => group.meals.some((m) => m.canModify);
 
@@ -113,6 +136,9 @@ export default function MyBookingsScreen({ navigation }) {
       date.includes(q)
     );
   });
+
+  const pagination = usePagination(filteredGroups, 5);
+  const displayedGroups = pagination.paginatedItems;
 
   if (loading) {
     return (
@@ -171,6 +197,7 @@ export default function MyBookingsScreen({ navigation }) {
 
         <Text style={styles.dates}>
           {group.fromDate?.split('T')[0]} → {group.toDate?.split('T')[0]}
+          {getGroupDayCount(group) > 1 ? `  ·  ${getGroupDayCount(group)} days` : ''}
         </Text>
         <Text style={styles.outlet}>📍 {group.canteenLocation}</Text>
         <Text style={styles.bookedFor}>
@@ -193,7 +220,11 @@ export default function MyBookingsScreen({ navigation }) {
                   <View style={styles.mealRowRight}>
                     {m.isCollected && <Text style={styles.collectedTag}>✓ Collected</Text>}
                     <Text style={styles.mealRowCost}>
-                      {m.totalCost != null ? `₹${m.totalCost}` : '—'}
+                      {m.totalCost != null
+                        ? getGroupDayCount(group) > 1
+                          ? `₹${m.totalCost}/day`
+                          : `₹${m.totalCost}`
+                        : '—'}
                     </Text>
                   </View>
                 </View>
@@ -212,7 +243,9 @@ export default function MyBookingsScreen({ navigation }) {
         </View>
 
         <View style={styles.cardFooter}>
-          <Text style={styles.totalCostLabel}>Total: ₹{totalCost}</Text>
+          <Text style={styles.totalCostLabel}>
+            Total{getGroupDayCount(group) > 1 ? ` (× ${getGroupDayCount(group)} days)` : ''}: ₹{totalCost}
+          </Text>
           {canModify && <Text style={styles.modifyHint}>Tap to edit or cancel</Text>}
         </View>
       </TouchableOpacity>
@@ -223,7 +256,7 @@ export default function MyBookingsScreen({ navigation }) {
     <FlatList
       style={styles.container}
       contentContainerStyle={styles.content}
-      data={filteredGroups}
+      data={displayedGroups}
       keyExtractor={(item) => item.bookingGroupID ?? `single-${item.meals[0].bookingID}`}
       renderItem={renderItem}
       refreshControl={
@@ -245,12 +278,12 @@ export default function MyBookingsScreen({ navigation }) {
             <TextInput
               style={styles.searchInput}
               value={searchQuery}
-              onChangeText={setSearchQuery}
+              onChangeText={handleSearchChange}
               placeholder="Search by booking ID, meal, outlet, date..."
               placeholderTextColor="#aaa"
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <TouchableOpacity onPress={() => handleSearchChange('')}>
                 <Text style={styles.clearBtn}>✕</Text>
               </TouchableOpacity>
             )}
@@ -262,7 +295,7 @@ export default function MyBookingsScreen({ navigation }) {
               <TouchableOpacity
                 key={f}
                 style={[styles.filterTab, statusFilter === f && styles.filterTabSelected]}
-                onPress={() => setStatusFilter(f)}
+                onPress={() => handleFilterChange(f)}
               >
                 <Text style={[styles.filterText, statusFilter === f && styles.filterTextSelected]}>
                   {f}
@@ -276,7 +309,18 @@ export default function MyBookingsScreen({ navigation }) {
               {filteredGroups.length} booking{filteredGroups.length !== 1 ? 's' : ''} found
             </Text>
           )}
+
+          {!pagination.showAll && filteredGroups.length > pagination.pageSize && (
+            <Text style={styles.recentLabel}>Showing {pagination.pageSize} most recent</Text>
+          )}
         </View>
+      }
+      ListFooterComponent={
+        <PaginationControls
+          {...pagination}
+          totalCount={filteredGroups.length}
+          itemLabel="Bookings"
+        />
       }
       ListEmptyComponent={
         <Text style={styles.emptyText}>
@@ -324,6 +368,7 @@ const styles = StyleSheet.create({
   filterText: { fontSize: 13, color: '#333', fontWeight: '500' },
   filterTextSelected: { color: '#fff', fontWeight: '600' },
   resultCount: { fontSize: 12, color: '#888', marginBottom: 10 },
+  recentLabel: { fontSize: 12, color: '#888', marginBottom: 10, fontStyle: 'italic' },
   card: {
     backgroundColor: '#fff', borderRadius: 12,
     padding: 16, marginBottom: 14, elevation: 2,

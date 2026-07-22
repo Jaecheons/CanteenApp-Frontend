@@ -7,6 +7,8 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import api from '../services/api';
+import usePagination from '../hooks/usePagination';
+import PaginationControls from '../components/PaginationControls';
 
 const STATUS_COLORS = {
   confirmed: '#27ae60',
@@ -15,6 +17,8 @@ const STATUS_COLORS = {
 
 const OUTLETS = ['Central Canteen', 'Administrative Building', 'Central Control Room', 'Central Workshop'];
 const TIME_FILTERS = ['Past', 'Today', 'Upcoming'];
+const MEAL_TYPES = ['Breakfast', 'Lunch', 'Evening Snacks', 'Dinner'];
+const CATEGORY_MEAL_TYPES = ['Lunch', 'Dinner'];
 
 function formatDate(date) {
   return date.toISOString().split('T')[0];
@@ -29,6 +33,8 @@ export default function OutletBookingsScreen({ navigation, route }) {
   const [timeFilter, setTimeFilter] = useState('Today');
   const [searchDate, setSearchDate] = useState(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
+  const [expandedOutlet, setExpandedOutlet] = useState(null);
+  const [expandedMeal, setExpandedMeal] = useState(null); // key: `${outlet}-${mealType}`
 
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -86,6 +92,8 @@ export default function OutletBookingsScreen({ navigation, route }) {
       const bDate = new Date(b.fromDate);
       return (!searchDate && timeFilter === 'Past') ? bDate - aDate : aDate - bDate;
     });
+    
+  const pagination = usePagination(filteredBookings, 5);
 
   const confirmedCount = filteredBookings.filter(
     (b) => b.status?.toLowerCase() === 'confirmed'
@@ -96,6 +104,39 @@ export default function OutletBookingsScreen({ navigation, route }) {
   ).length;
 
   const clearDateSearch = () => setSearchDate(null);
+
+  const toggleOutletExpand = (outlet) => {
+    setExpandedOutlet((prev) => (prev === outlet ? null : outlet));
+    setExpandedMeal(null);
+  };
+
+  const toggleMealExpand = (outlet, mealType) => {
+    const key = `${outlet}-${mealType}`;
+    setExpandedMeal((prev) => (prev === key ? null : key));
+  };
+
+  const getMealBreakdown = (outlet) =>
+    MEAL_TYPES.map((meal) => ({
+      meal,
+      count: timeFilteredBookings.filter(
+        (b) => b.canteenLocation === outlet && b.mealType === meal
+      ).length,
+    }));
+
+  const getCategoryBreakdown = (outlet, mealType) => {
+    const rows = timeFilteredBookings.filter(
+      (b) => b.canteenLocation === outlet && b.mealType === mealType
+    );
+    return {
+      veg: rows.reduce((s, b) => s + (b.vegCount ?? 0), 0),
+      paneer: rows.reduce((s, b) => s + (b.paneerCount ?? 0), 0),
+      nonVeg: rows.reduce((s, b) => s + (b.nonVegCount ?? 0), 0),
+      addOns: rows.reduce(
+        (s, b) => s + (b.addOns ?? []).reduce((a, x) => a + (x.quantity ?? 0), 0),
+        0
+      ),
+    };
+  };
 
   const renderItem = ({ item }) => {
     const status = item.status?.toLowerCase() ?? 'confirmed';
@@ -113,7 +154,7 @@ export default function OutletBookingsScreen({ navigation, route }) {
           </View>
         </View>
         <Text style={styles.employeeName}>
-          {item.employeeName || `Employee #${item.employeeID ?? item.newUserID}`}
+          {item.employeeName ?? item.newUserName} Employee #{item.employeeID ?? (item.newUserID || '—')}
         </Text>
         <Text style={styles.mealType}>
           {item.isSpecialMeal ? 'Special - ' : ''}{item.mealType}
@@ -154,7 +195,7 @@ export default function OutletBookingsScreen({ navigation, route }) {
     <FlatList
       style={styles.container}
       contentContainerStyle={styles.content}
-      data={filteredBookings}
+      data={pagination.paginatedItems}
       keyExtractor={(item) => String(item.bookingID)}
       renderItem={renderItem}
       refreshControl={
@@ -214,34 +255,94 @@ export default function OutletBookingsScreen({ navigation, route }) {
             <Text style={styles.dateLabel}>{todayStr}</Text>
           )}
 
-          {/* Outlet Tabs */}
-          <View style={styles.tabsContainer}>
+          {/* Outlet Accordion */}
+          <View style={styles.outletListBox}>
             {OUTLETS.map((outlet) => {
               const count = timeFilteredBookings.filter(
                 (b) => b.canteenLocation === outlet
               ).length;
+              const isSelected = selectedOutlet === outlet;
+              const isExpanded = expandedOutlet === outlet;
+              const breakdown = isExpanded ? getMealBreakdown(outlet) : [];
+
               return (
-                <TouchableOpacity
-                  key={outlet}
-                  style={[
-                    styles.tab,
-                    selectedOutlet === outlet && styles.tabSelected,
-                  ]}
-                  onPress={() => setSelectedOutlet(outlet)}
-                >
-                  <Text style={[
-                    styles.tabText,
-                    selectedOutlet === outlet && styles.tabTextSelected,
-                  ]}>
-                    {outlet}
-                  </Text>
-                  <Text style={[
-                    styles.tabCount,
-                    selectedOutlet === outlet && styles.tabCountSelected,
-                  ]}>
-                    {count}
-                  </Text>
-                </TouchableOpacity>
+                <View key={outlet} style={[styles.outletCard, isSelected && styles.outletCardSelected]}>
+                  <TouchableOpacity
+                    style={styles.outletCardHeader}
+                    onPress={() => {
+                      setSelectedOutlet(outlet);
+                      toggleOutletExpand(outlet);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.outletCardName, isSelected && styles.outletCardNameSelected]}>
+                      {outlet}
+                    </Text>
+                    <View style={styles.outletCardRight}>
+                      <View style={[styles.outletCountBadge, isSelected && styles.outletCountBadgeSelected]}>
+                        <Text style={[styles.outletCountBadgeText, isSelected && styles.outletCountBadgeTextSelected]}>
+                          {count}
+                        </Text>
+                      </View>
+                      <Text style={styles.chevron}>{isExpanded ? '▲' : '▼'}</Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  {isExpanded && (
+                    <View style={styles.outletCardBody}>
+                      {breakdown.every((m) => m.count === 0) ? (
+                        <Text style={styles.noBookingsText}>No bookings.</Text>
+                      ) : (
+                        breakdown.map((m) => {
+                          const canExpandMeal = CATEGORY_MEAL_TYPES.includes(m.meal) && m.count > 0;
+                          const mealKey = `${outlet}-${m.meal}`;
+                          const isMealExpanded = expandedMeal === mealKey;
+                          const cat = isMealExpanded ? getCategoryBreakdown(outlet, m.meal) : null;
+
+                          return (
+                            <View key={m.meal} style={styles.mealBreakdownRow}>
+                              <TouchableOpacity
+                                style={styles.mealBreakdownHeader}
+                                onPress={() => canExpandMeal && toggleMealExpand(outlet, m.meal)}
+                                disabled={!canExpandMeal}
+                                activeOpacity={canExpandMeal ? 0.7 : 1}
+                              >
+                                <Text style={styles.mealBreakdownLabel}>{m.meal}</Text>
+                                <View style={styles.mealBreakdownRight}>
+                                  <Text style={styles.mealBreakdownCount}>{m.count}</Text>
+                                  {canExpandMeal && (
+                                    <Text style={styles.chevronSmall}>{isMealExpanded ? '▲' : '▼'}</Text>
+                                  )}
+                                </View>
+                              </TouchableOpacity>
+
+                              {isMealExpanded && cat && (
+                                <View style={styles.categoryRow}>
+                                  <View style={styles.categoryChip}>
+                                    <Text style={styles.categoryChipCount}>{cat.veg}</Text>
+                                    <Text style={styles.categoryChipLabel}>Veg</Text>
+                                  </View>
+                                  <View style={styles.categoryChip}>
+                                    <Text style={styles.categoryChipCount}>{cat.paneer}</Text>
+                                    <Text style={styles.categoryChipLabel}>Paneer</Text>
+                                  </View>
+                                  <View style={styles.categoryChip}>
+                                    <Text style={styles.categoryChipCount}>{cat.nonVeg}</Text>
+                                    <Text style={styles.categoryChipLabel}>Non-Veg</Text>
+                                  </View>
+                                  <View style={styles.categoryChip}>
+                                    <Text style={styles.categoryChipCount}>{cat.addOns}</Text>
+                                    <Text style={styles.categoryChipLabel}>Omelet</Text>
+                                  </View>
+                                </View>
+                              )}
+                            </View>
+                          );
+                        })
+                      )}
+                    </View>
+                  )}
+                </View>
               );
             })}
           </View>
@@ -270,6 +371,15 @@ export default function OutletBookingsScreen({ navigation, route }) {
             </Text>
           )}
         </View>
+      }
+      ListFooterComponent={
+        filteredBookings.length > 0 ? (
+          <PaginationControls
+            {...pagination}
+            totalCount={filteredBookings.length}
+            itemLabel="Bookings"
+          />
+        ) : null
       }
     />
   );
@@ -326,6 +436,51 @@ const styles = StyleSheet.create({
   tabCountSelected: {
     color: '#fff',
   },
+  outletListBox: { marginBottom: 16 },
+  outletCard: {
+    backgroundColor: '#fff', borderRadius: 12,
+    marginBottom: 10, elevation: 2, overflow: 'hidden',
+    borderWidth: 1, borderColor: '#eee',
+  },
+  outletCardSelected: { borderColor: '#005f99' },
+  outletCardHeader: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', padding: 14,
+  },
+  outletCardName: { fontSize: 14, fontWeight: '600', color: '#333' },
+  outletCardNameSelected: { color: '#005f99', fontWeight: 'bold' },
+  outletCardRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  outletCountBadge: {
+    backgroundColor: '#f0f0f0', borderRadius: 16,
+    paddingVertical: 4, paddingHorizontal: 12,
+  },
+  outletCountBadgeSelected: { backgroundColor: '#005f99' },
+  outletCountBadgeText: { color: '#333', fontWeight: 'bold', fontSize: 13 },
+  outletCountBadgeTextSelected: { color: '#fff' },
+  chevron: { fontSize: 12, color: '#888' },
+  outletCardBody: {
+    padding: 14, paddingTop: 4,
+    borderTopWidth: 1, borderTopColor: '#f0f0f0',
+  },
+  noBookingsText: { fontSize: 13, color: '#888', textAlign: 'center', paddingVertical: 10 },
+  mealBreakdownRow: { marginTop: 8 },
+  mealBreakdownHeader: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', paddingVertical: 8,
+    borderBottomWidth: 1, borderBottomColor: '#f5f5f5',
+  },
+  mealBreakdownLabel: { fontSize: 13, fontWeight: '600', color: '#1a1a1a' },
+  mealBreakdownRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  mealBreakdownCount: { fontSize: 14, fontWeight: 'bold', color: '#005f99' },
+  chevronSmall: { fontSize: 10, color: '#888' },
+  categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8, marginBottom: 4 },
+  categoryChip: {
+    backgroundColor: '#e8f4fd', borderRadius: 10,
+    paddingVertical: 8, paddingHorizontal: 12, alignItems: 'center', minWidth: 68,
+    borderLeftWidth: 3, borderLeftColor: '#005f99',
+  },
+  categoryChipCount: { fontSize: 15, fontWeight: 'bold', color: '#005f99' },
+  categoryChipLabel: { fontSize: 10, color: '#555', marginTop: 2 },
   statsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
   statCard: {
     flex: 1, backgroundColor: '#fff', borderRadius: 10,

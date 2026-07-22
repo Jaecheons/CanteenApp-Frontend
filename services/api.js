@@ -2,7 +2,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BASE_URL = 'https://jq1hh6w9-5084.asse.devtunnels.ms/api';
+const BASE_URL = 'https://connect.bcplindia.co.in:92/api';
 
 const api = axios.create({
   baseURL: BASE_URL,

@@ -119,8 +119,8 @@ export default function BookingDetailScreen({ route, navigation }) {
       {/* Employee Info */}
       <Text style={styles.sectionLabel}>Employee Details</Text>
       <View style={styles.card}>
-        <Row label="Employee ID" value={String(booking.employeeID ?? '—')} />
-        <Row label="Employee Name" value={booking.Name || '—'} />
+        <Row label="Employee ID" value={String(booking.employeeID ?? (booking.newUserID || '—'))} />
+        <Row label="Employee Name" value={booking.employeeName ?? (booking.newUserName || '—')} />
       </View>
 
       {/* Booking Info */}

@@ -1,4 +1,4 @@
-// screens/BookingDetailScreen.js
+// screens/BookingDetailScreen.js - To view and edit details of a booking group or a single booking.
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView,

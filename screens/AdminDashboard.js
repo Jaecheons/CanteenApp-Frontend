@@ -7,6 +7,8 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import api from '../services/api';
+import usePagination from '../hooks/usePagination';
+import PaginationControls from '../components/PaginationControls';
 
 const STATUS_COLORS = {
   confirmed: '#27ae60',
@@ -67,27 +69,7 @@ export default function AdminDashboard({ navigation }) {
     setExpandedOutlet((prev) => (prev === outlet ? null : outlet));
   };
 
-  if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#005f99" />
-        <Text style={styles.loadingText}>Loading dashboard...</Text>
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={styles.centered}>
-        <Text style={styles.errorText}>{error}</Text>
-        <TouchableOpacity style={styles.btn} onPress={fetchData}>
-          <Text style={styles.btnText}>Retry</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  // Today's bookings
+    // Today's bookings
   const todayBookings = bookings.filter(
     (b) =>
       b.fromDate?.split('T')[0] <= todayStr &&
@@ -132,6 +114,8 @@ export default function AdminDashboard({ navigation }) {
     return name.includes(query) || id.includes(query);
   });
 
+  const pagination = usePagination(filteredBookings, 5);
+
   // Split specials into active (today or future) and past (history)
   const activeSpecials = specials.filter(
     (s) => (s.date?.split('T')[0] ?? '') >= todayStr
@@ -142,13 +126,37 @@ export default function AdminDashboard({ navigation }) {
 
   const specialsSectionData = activeSpecials.length > 0 ? activeSpecials : ['empty_specials'];
 
+  const bookingsSectionData = pagination.paginatedItems.length > 0
+    ? [...pagination.paginatedItems, 'pagination_footer']
+    : ['empty_bookings'];
+
   const sections = [
     { title: 'header', data: ['header'] },
     { title: 'Specials', data: specialsSectionData },
-    { title: 'All Bookings', data: filteredBookings.length > 0 ? filteredBookings : ['empty_bookings'] },
+    { title: 'All Bookings', data: bookingsSectionData },
   ];
 
-  const renderItem = ({ item, section }) => {
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#005f99" />
+        <Text style={styles.loadingText}>Loading dashboard...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.centered}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.btn} onPress={fetchData}>
+          <Text style={styles.btnText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+    const renderItem = ({ item, section }) => {
 
     if (section.title === 'header') {
       return (
@@ -264,7 +272,7 @@ export default function AdminDashboard({ navigation }) {
             style={styles.outletBtn}
             onPress={() => navigation.navigate('OutletBookings')}
           >
-            <Text style={styles.outletBtnText}>📍 View by Outlet</Text>
+            <Text style={styles.outletBtnText}>View by Outlet</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -302,7 +310,7 @@ export default function AdminDashboard({ navigation }) {
             <TextInput
               style={styles.searchInput}
               value={searchQuery}
-              onChangeText={setSearchQuery}
+              onChangeText={(text) => { setSearchQuery(text); pagination.resetPage(); }}
               placeholder="Search by employee name or ID..."
               placeholderTextColor="#aaa"
               clearButtonMode="while-editing"
@@ -337,6 +345,15 @@ export default function AdminDashboard({ navigation }) {
             ? `No bookings found for "${searchQuery}"`
             : 'No bookings found.'}
         </Text>
+      );
+    }
+    if (item === 'pagination_footer') {
+      return (
+        <PaginationControls
+          {...pagination}
+          totalCount={filteredBookings.length}
+          itemLabel="Bookings"
+        />
       );
     }
 
