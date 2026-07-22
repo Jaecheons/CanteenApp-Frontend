@@ -4,6 +4,7 @@ import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, Alert, ActivityIndicator
 } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import api from '../services/api';
 
 const ROLES = ['Employee', 'Admin'];
@@ -76,7 +77,13 @@ export default function AddEmployeeScreen({ navigation }) {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+
+    <KeyboardAwareScrollView 
+    style={styles.container} 
+    contentContainerStyle={styles.content}
+    enableOnAndroid={true}
+    keyboardShouldPersistTaps="handled"
+    >
       <Text style={styles.heading}>Add New User</Text>
       <Text style={styles.subheading}>Create a login for an employee, contractor, intern, or guest.</Text>
 
@@ -160,13 +167,13 @@ export default function AddEmployeeScreen({ navigation }) {
           : <Text style={styles.submitText}>Create User</Text>
         }
       </TouchableOpacity>
-    </ScrollView>
+    </KeyboardAwareScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
-  content: { padding: 20, paddingBottom: 40 },
+  content: { padding: 20, paddingBottom: 120 },
   heading: { fontSize: 22, fontWeight: 'bold', color: '#1a1a1a', marginBottom: 4 },
   subheading: { fontSize: 13, color: '#888', marginBottom: 20 },
   label: { fontSize: 14, fontWeight: '600', color: '#333', marginTop: 16, marginBottom: 6 },
@@ -181,12 +188,12 @@ const styles = StyleSheet.create({
     borderRadius: 8, borderWidth: 1, borderColor: '#ccc', backgroundColor: '#fff',
   },
   optionBtnSelected: { backgroundColor: '#005f99', borderColor: '#005f99' },
-  optionText: { fontSize: 14, color: '#333' },
+  optionText: { fontSize: 14, color: '#333333' },
   optionTextSelected: { color: '#fff', fontWeight: '600' },
   submitBtn: {
     backgroundColor: '#005f99', padding: 16,
     borderRadius: 10, alignItems: 'center', marginTop: 30,
   },
   btnDisabled: { backgroundColor: '#aaa' },
-  submitText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  submitText: { color: '#fffcfc', fontSize: 16, fontWeight: 'bold' },
 });
