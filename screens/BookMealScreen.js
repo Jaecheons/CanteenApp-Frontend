@@ -45,6 +45,7 @@ function emptyMealState() {
     vegCount: '',
     paneerCount: '',
     nonVegCount: '',
+    addOnQuantities: {},  // { [addOnID]: quantityString }
   };
 }
 
@@ -63,6 +64,7 @@ export default function BookMealScreen({ navigation }) {
   const [showSummary, setShowSummary] = useState(false);
   const [networkError, setNetworkError] = useState(false);
   const [mealPricing, setMealPricing] = useState([]);
+  const [addOns, setAddOns] = useState([]);
 
   // Per-meal-type selection + details
   const [meals, setMeals] = useState(() => {
@@ -101,6 +103,12 @@ export default function BookMealScreen({ navigation }) {
       .catch(() => setMealPricing([]));
   }, []);
 
+  useEffect(() => {
+    api.get('/AddOns')
+      .then((res) => setAddOns(res.data ?? []))
+      .catch(() => setAddOns([]));
+  }, []);
+
   const getSpecialFor = (mealType) =>
     specials.find((s) => s.mealType === mealType && s.applicableOutlets?.includes(outlet));
 
@@ -120,6 +128,18 @@ export default function BookMealScreen({ navigation }) {
 
   const isTodaySelected = fromDate === formatDate(today);
 
+  // Inclusive count of days in the selected range — a booking across
+  // multiple dates books the same meals every day in that range, so costs
+  // must scale by this, not just be computed once.
+  const getDayCount = () => {
+    if (!fromDate || !toDate) return 1;
+    const start = new Date(fromDate);
+    const end = new Date(toDate);
+    const diffMs = end.getTime() - start.getTime();
+    const days = Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1;
+    return days > 0 ? days : 1;
+  };
+
   const isCutoffPassed = (mealType) => {
     if (!isTodaySelected) return false;
     const c = CUTOFF_TIMES[mealType];
@@ -131,6 +151,16 @@ export default function BookMealScreen({ navigation }) {
 
   const updateMeal = (mealType, patch) => {
     setMeals((prev) => ({ ...prev, [mealType]: { ...prev[mealType], ...patch } }));
+  };
+
+  const updateAddOnQuantity = (mealType, addOnID, qty) => {
+    setMeals((prev) => ({
+      ...prev,
+      [mealType]: {
+        ...prev[mealType],
+        addOnQuantities: { ...prev[mealType].addOnQuantities, [addOnID]: qty },
+      },
+    }));
   };
 
   const toggleMealSelected = (mealType) => {
@@ -211,12 +241,17 @@ export default function BookMealScreen({ navigation }) {
       }
     }
 
+    const mealAddOns = Object.entries(state.addOnQuantities)
+      .map(([addOnID, qty]) => ({ addOnID: parseInt(addOnID), quantity: parseInt(qty) || 0 }))
+      .filter((a) => a.quantity > 0);
+
     return {
       mealType,
       vegCount,
       paneerCount,
       nonVegCount,
       isSpecialMeal: state.isSpecialMeal,
+      addOns: mealAddOns,
     };
   };
 
@@ -308,10 +343,20 @@ export default function BookMealScreen({ navigation }) {
     return (v * base) + (p * (base + paneerSurcharge)) + (n * (base + nonVegSurcharge));
   };
 
+  const getAddOnCostFor = (mealType) => {
+    const state = meals[mealType];
+    return Object.entries(state.addOnQuantities).reduce((sum, [addOnID, qty]) => {
+      const addOn = addOns.find((a) => a.addOnID === parseInt(addOnID));
+      const q = parseInt(qty) || 0;
+      if (!addOn || q <= 0) return sum;
+      return sum + q * addOn.costPerUnit;
+    }, 0);
+  };
+
   const estimatedTotal = selectedMealTypes.reduce((sum, m) => {
     const c = getEstimatedCostFor(m);
-    return sum + (c ?? 0);
-  }, 0);
+    return sum + (c ?? 0) + getAddOnCostFor(m);
+  }, 0) * getDayCount();
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -515,8 +560,52 @@ export default function BookMealScreen({ navigation }) {
                   </>
                 )}
 
-                {getEstimatedCostFor(mealType) !== null && (
-                  <Text style={styles.mealCostHint}>Estimated: ₹{getEstimatedCostFor(mealType)}</Text>
+                {/* Add-ons */}
+                {addOns.length > 0 && (
+                  <>
+                    <Text style={styles.subLabel}>Add-Ons</Text>
+                    {addOns.map((addOn) => {
+                      const qty = state.addOnQuantities[addOn.addOnID] ?? '';
+                      const qtyNum = parseInt(qty) || 0;
+                      return (
+                        <View key={addOn.addOnID} style={styles.addOnRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.addOnName}>{addOn.name}</Text>
+                            <Text style={styles.addOnPrice}>₹{addOn.costPerUnit} each</Text>
+                          </View>
+                          <View style={styles.stepperRow}>
+                            <TouchableOpacity
+                              style={styles.stepperBtn}
+                              onPress={() => updateAddOnQuantity(mealType, addOn.addOnID, String(Math.max(0, qtyNum - 1)))}
+                            >
+                              <Text style={styles.stepperBtnText}>−</Text>
+                            </TouchableOpacity>
+                            <TextInput
+                              style={styles.stepperInput}
+                              value={qty}
+                              onChangeText={(v) => updateAddOnQuantity(mealType, addOn.addOnID, v)}
+                              keyboardType="numeric"
+                              placeholder="0"
+                            />
+                            <TouchableOpacity
+                              style={styles.stepperBtn}
+                              onPress={() => updateAddOnQuantity(mealType, addOn.addOnID, String(qtyNum + 1))}
+                            >
+                              <Text style={styles.stepperBtnText}>+</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </>
+                )}
+
+                {(getEstimatedCostFor(mealType) !== null || getAddOnCostFor(mealType) > 0) && (
+                  <Text style={styles.mealCostHint}>
+                    {getDayCount() > 1
+                      ? `₹${(getEstimatedCostFor(mealType) ?? 0) + getAddOnCostFor(mealType)} / day × ${getDayCount()} days`
+                      : `Estimated: ₹${(getEstimatedCostFor(mealType) ?? 0) + getAddOnCostFor(mealType)}`}
+                  </Text>
                 )}
               </View>
             )}
@@ -526,7 +615,9 @@ export default function BookMealScreen({ navigation }) {
 
       {estimatedTotal > 0 && (
         <View style={styles.costBox}>
-          <Text style={styles.costLabel}>Estimated Total</Text>
+          <Text style={styles.costLabel}>
+            Estimated Total{getDayCount() > 1 ? ` (${getDayCount()} days)` : ''}
+          </Text>
           <Text style={styles.costValue}>₹{estimatedTotal}</Text>
         </View>
       )}
@@ -568,22 +659,43 @@ export default function BookMealScreen({ navigation }) {
               const p = buildMealPayload(mealType);
               const showCategorySection = CATEGORY_MEAL_TYPES.includes(mealType);
               return (
-                <View style={styles.summaryRow} key={mealType}>
-                  <Text style={styles.summaryLabel}>
-                    {p.isSpecialMeal ? `🌟 ${mealType} (Special)` : mealType}
-                  </Text>
-                  <Text style={styles.summaryValue}>
-                    {p.isSpecialMeal
-                      ? '—'
-                      : !showCategorySection
-                        ? (bookingFor === 'Guests' ? `${guestCount} persons` : 'Veg')
-                        : bookingFor === 'Self'
-                          ? meals[mealType].mealCategory
-                          : `${p.vegCount} Veg · ${p.paneerCount} Paneer · ${p.nonVegCount} Non-Veg`}
-                  </Text>
+                <View key={mealType}>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>
+                      {p.isSpecialMeal ? `🌟 ${mealType} (Special)` : mealType}
+                    </Text>
+                    <Text style={styles.summaryValue}>
+                      {p.isSpecialMeal
+                        ? '—'
+                        : !showCategorySection
+                          ? (bookingFor === 'Guests' ? `${guestCount} persons` : '—')
+                          : bookingFor === 'Self'
+                            ? meals[mealType].mealCategory
+                            : `${p.vegCount} Veg · ${p.paneerCount} Paneer · ${p.nonVegCount} Non-Veg`}
+                    </Text>
+                  </View>
+                  {p.addOns.map((a) => {
+                    const addOn = addOns.find((x) => x.addOnID === a.addOnID);
+                    if (!addOn) return null;
+                    return (
+                      <View style={styles.summaryRow} key={a.addOnID}>
+                        <Text style={styles.summaryAddOnLabel}>  + {addOn.name} × {a.quantity}</Text>
+                        <Text style={styles.summaryValue}>₹{a.quantity * addOn.costPerUnit}</Text>
+                      </View>
+                    );
+                  })}
                 </View>
               );
             })}
+
+            {estimatedTotal > 0 && (
+              <View style={[styles.summaryRow, styles.summaryTotalRow]}>
+                <Text style={styles.summaryTotalLabel}>
+                  Total{getDayCount() > 1 ? ` (× ${getDayCount()} days)` : ''}
+                </Text>
+                <Text style={styles.summaryTotalValue}>₹{estimatedTotal}</Text>
+              </View>
+            )}
 
             {selectedMealTypes.some(isCutoffPassed) && (
               <Text style={styles.modalWarning}>
@@ -662,6 +774,26 @@ const styles = StyleSheet.create({
   mealErrorText: { color: '#c0392b', fontSize: 12, fontWeight: '600', marginTop: 8, marginLeft: 32 },
   mealCardBody: { marginTop: 12, paddingLeft: 32 },
   mealCostHint: { fontSize: 12, color: '#005f99', marginTop: 10, fontWeight: '600' },
+  addOnRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
+  },
+  addOnName: { fontSize: 13, color: '#1a1a1a', fontWeight: '600' },
+  addOnPrice: { fontSize: 11, color: '#888', marginTop: 2 },
+  stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  stepperBtn: {
+    width: 28, height: 28, borderRadius: 6, backgroundColor: '#e8f4fd',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  stepperBtnText: { fontSize: 16, color: '#005f99', fontWeight: 'bold' },
+  stepperInput: {
+    width: 40, textAlign: 'center', backgroundColor: '#fff',
+    borderWidth: 1, borderColor: '#ddd', borderRadius: 6, paddingVertical: 4, fontSize: 14,
+  },
+  summaryAddOnLabel: { fontSize: 12, color: '#888' },
+  summaryTotalRow: { borderBottomWidth: 0, marginTop: 4, paddingTop: 14, borderTopWidth: 2, borderTopColor: '#005f99' },
+  summaryTotalLabel: { fontSize: 15, color: '#1a1a1a', fontWeight: 'bold' },
+  summaryTotalValue: { fontSize: 17, color: '#005f99', fontWeight: 'bold' },
   specialBox: {
     backgroundColor: '#fff8e1', borderRadius: 12,
     padding: 16, marginBottom: 12,
