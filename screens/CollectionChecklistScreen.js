@@ -2,7 +2,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
-  TouchableOpacity, ActivityIndicator, RefreshControl
+  TouchableOpacity, ActivityIndicator, RefreshControl, Alert
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import api from '../services/api';
@@ -59,6 +59,16 @@ export default function CollectionChecklistScreen() {
   );
 
   const toggleCollected = async (booking) => {
+
+    if (selectedDate !== formatDate(new Date())) 
+    {
+      Alert.alert(
+        'Collection Locked',
+        'Bookings can only be marked as collected on the current date.'
+      );
+      return;
+    }
+
     const wasCollected = booking.isCollected;
     try {
       setUpdatingId(booking.bookingID);
@@ -85,33 +95,28 @@ export default function CollectionChecklistScreen() {
   const notCollectedBookings = dayBookings.filter((b) => !b.isCollected);
   const totalCollectedCost = collectedBookings.reduce((sum, b) => sum + (b.totalCost ?? 0), 0);
 
-  const employeeTotalsMap = {};
-  bookings
-    .filter((b) => b.status?.toLowerCase() === 'confirmed' && b.isCollected)
-    .forEach((b) => {
-      const key = b.employeeID ?? b.newUserID;
-      if (!employeeTotalsMap[key]) {
-        employeeTotalsMap[key] = {
-          employeeID: b.employeeID,
-          employeeName: b.employeeName || `Employee #${b.employeeID}`,
-          total: 0,
-          count: 0,
-        };
-      }
-      employeeTotalsMap[key].total += b.totalCost ?? 0;
-      employeeTotalsMap[key].count += 1;
-    });
-  const employeeTotals = Object.values(employeeTotalsMap).sort((a, b) => b.total - a.total);
+  const today = formatDate(new Date());
+  const isToday = selectedDate === today;
 
   const renderItem = ({ item }) => {
     const isUpdating = updatingId === item.bookingID;
     return (
+      
       <TouchableOpacity
-        style={[styles.card, item.isCollected ? styles.cardCollected : styles.cardPending]}
-        onPress={() => toggleCollected(item)}
-        disabled={isUpdating}
+        style={[
+            styles.card,
+            item.isCollected ? styles.cardCollected : styles.cardPending,
+            !isToday && { opacity: 0.7 },
+        ]}
+        onPress={() => {
+            if (isToday) {
+                toggleCollected(item);
+            }
+        }}
+        disabled={isUpdating || !isToday}
         activeOpacity={0.7}
       >
+
         <View style={styles.cardLeft}>
           <Text style={styles.employeeName}>
             {item.employeeName || `Employee #${item.employeeID ?? item.newUserID}`}
@@ -218,24 +223,6 @@ export default function CollectionChecklistScreen() {
             <Text style={styles.totalCostValue}>₹{totalCollectedCost}</Text>
           </View>
 
-          {/* Per-employee cumulative totals */}
-          <Text style={styles.sectionLabel}>Employee Totals (All-Time, Collected Only)</Text>
-          <View style={styles.employeeTotalsBox}>
-            {employeeTotals.length === 0 ? (
-              <Text style={styles.noDataText}>No collected meals recorded yet.</Text>
-            ) : (
-              employeeTotals.map((emp) => (
-                <View key={emp.employeeID} style={styles.employeeRow}>
-                  <View>
-                    <Text style={styles.employeeRowName}>{emp.employeeName}</Text>
-                    <Text style={styles.employeeRowCount}>{emp.count} meal{emp.count !== 1 ? 's' : ''} collected</Text>
-                  </View>
-                  <Text style={styles.employeeRowTotal}>₹{emp.total}</Text>
-                </View>
-              ))
-            )}
-          </View>
-
           <Text style={styles.sectionLabel}>Bookings for {selectedDate}</Text>
 
           {dayBookings.length === 0 && (
@@ -293,19 +280,6 @@ const styles = StyleSheet.create({
     fontSize: 13, fontWeight: 'bold', color: '#888',
     textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10,
   },
-  employeeTotalsBox: {
-    backgroundColor: '#fff', borderRadius: 12,
-    padding: 16, marginBottom: 20, elevation: 2,
-  },
-  noDataText: { fontSize: 13, color: '#888', textAlign: 'center' },
-  employeeRow: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
-  },
-  employeeRowName: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
-  employeeRowCount: { fontSize: 12, color: '#888', marginTop: 2 },
-  employeeRowTotal: { fontSize: 16, fontWeight: 'bold', color: '#005f99' },
   emptyText: { color: '#888', fontSize: 14, textAlign: 'center', marginTop: 10 },
   card: {
     flexDirection: 'row', justifyContent: 'space-between',
@@ -332,5 +306,4 @@ const styles = StyleSheet.create({
     backgroundColor: '#005f99', paddingVertical: 10,
     paddingHorizontal: 24, borderRadius: 8,
   },
-  btnText: { color: '#fff', fontWeight: '600' },
 });
