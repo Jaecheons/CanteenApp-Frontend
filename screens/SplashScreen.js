@@ -36,7 +36,7 @@ export default function SplashScreen({ navigation }) {
         style={styles.logo}
         resizeMode="contain"
       />
-      <Text style={styles.title}>Canteen App</Text>
+      <Text style={styles.title}>E-Canteen</Text>
       <Text style={styles.subtitle}>Meal Booking App</Text>
     </View>
   );
@@ -45,7 +45,7 @@ export default function SplashScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#005f99',
+    backgroundColor: '#010048',
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -96,7 +96,7 @@ export default function LoginScreen({ navigation }) {
     <ImageBackground
       source={require('../assets/login-bg.png')}
       style={styles.background}
-      resizeMode="cover"
+      resizeMode="contain"
     >
       <KeyboardAvoidingView
         style={styles.overlay}
@@ -104,7 +104,9 @@ export default function LoginScreen({ navigation }) {
       >
         <View style={styles.card}>
 
-          <Text style={styles.heading}>Welcome</Text>
+          <Text style={styles.heading}>E-Canteen</Text>
+          <Text style={styles.subheading}>Welcome to BCPL Canteen Service</Text>
+
           <Text style={styles.subheading}>Sign in to continue</Text>
 
           <Text style={styles.label}>Username</Text>
@@ -171,6 +173,7 @@ export default function LoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   background: {
     flex: 1,
+    backgroundColor: '#0a1a2f',
   },
   overlay: {
     flex: 1,
@@ -194,7 +197,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   subheading: {
-    fontSize: 15,
+    fontSize: 14,
     color: 'rgba(255,255,255,0.8)',
     alignSelf: 'center',
     marginBottom: 32,
