@@ -124,7 +124,7 @@ export default function AdminDashboard({ navigation }) {
     .filter((s) => (s.date?.split('T')[0] ?? '') < todayStr)
     .sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  const specialsSectionData = activeSpecials.length > 0 ? activeSpecials : ['empty_specials'];
+  //const specialsSectionData = activeSpecials.length > 0 ? activeSpecials : ['empty_specials'];
 
   const bookingsSectionData = pagination.paginatedItems.length > 0
     ? [...pagination.paginatedItems, 'pagination_footer']
@@ -132,7 +132,7 @@ export default function AdminDashboard({ navigation }) {
 
   const sections = [
     { title: 'header', data: ['header'] },
-    { title: 'Specials', data: specialsSectionData },
+    //{ title: 'Specials', data: specialsSectionData },
     { title: 'All Bookings', data: bookingsSectionData },
   ];
 
@@ -254,12 +254,12 @@ export default function AdminDashboard({ navigation }) {
           </View>
 
           {/* Action Buttons */}
-          <TouchableOpacity
+          {/*<TouchableOpacity
             style={styles.specialBtn}
             onPress={() => navigation.navigate('PublishSpecial')}
           >
             <Text style={styles.specialBtnText}> Publish Special Meal</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
           <TouchableOpacity
             style={styles.menuBtn}
@@ -330,14 +330,14 @@ export default function AdminDashboard({ navigation }) {
       );
     }
 
-    if (item === 'empty_specials') {
+    /* if (item === 'empty_specials') {
       return (
         <View>
           <Text style={styles.emptyText}>No active or upcoming specials.</Text>
           {pastSpecials.length > 0 && renderHistoryToggle()}
         </View>
       );
-    }
+    } */
     if (item === 'empty_bookings') {
       return (
         <Text style={styles.emptyText}>
@@ -357,7 +357,7 @@ export default function AdminDashboard({ navigation }) {
       );
     }
 
-    if (section.title === 'Specials') {
+    {/* if (section.title === 'Specials') {
       const isLastActiveItem = activeSpecials[activeSpecials.length - 1] === item;
 
       return (
@@ -378,7 +378,7 @@ export default function AdminDashboard({ navigation }) {
           {isLastActiveItem && pastSpecials.length > 0 && renderHistoryToggle()}
         </View>
       );
-    }
+    } */}
 
     const status = item.status?.toLowerCase() ?? 'confirmed';
     const statusColor = STATUS_COLORS[status] ?? '#888';
@@ -395,7 +395,9 @@ export default function AdminDashboard({ navigation }) {
           </View>
         </View>
         <Text style={styles.employeeName}>
-          {item.employeeName || `Employee #${item.employeeID ?? item.newUserID}`}
+          {item.employeeID
+            ? `${item.employeeName ?? 'Unknown'} (EmpId: ${item.employeeID})`
+            : `${item.employeeName ?? 'Unknown'}`}
         </Text>
         <Text style={styles.mealType}>
           {item.isSpecialMeal ? '🌟 ' : ''}{item.mealType}
@@ -408,7 +410,7 @@ export default function AdminDashboard({ navigation }) {
     );
   };
 
-  const renderHistoryToggle = () => (
+  /* const renderHistoryToggle = () => (
     <View>
       <TouchableOpacity
         style={styles.historyToggle}
@@ -437,7 +439,7 @@ export default function AdminDashboard({ navigation }) {
 
       ))}
     </View>
-  );
+  ); */
 
   const renderSectionHeader = ({ section }) => {
     if (section.title === 'header') return null;

@@ -128,7 +128,7 @@ export default function HomeScreen({ navigation }) {
       </View>
 
       {/* Today's Special Banner */}
-      {specials.length > 0 && (
+      {/* {specials.length > 0 && (
         <View style={styles.specialBanner}>
           <Text style={styles.specialTitle}>🌟 Today's Special</Text>
           {specials.map((special, index) => (
@@ -150,7 +150,7 @@ export default function HomeScreen({ navigation }) {
             </View>
           ))}
         </View>
-      )}
+      )} */}
 
       {/* Quick Actions */}
       <Text style={styles.sectionTitle}>Quick Actions</Text>

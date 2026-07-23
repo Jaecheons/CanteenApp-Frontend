@@ -76,7 +76,7 @@ export default function BookMealScreen({ navigation }) {
   // Errors from a failed all-or-nothing submit, keyed by mealType
   const [mealErrors, setMealErrors] = useState({});
 
-  useEffect(() => {
+  /*useEffect(() => {
     api.get('/Specials/today')
       .then(async (res) => {
         const data = res.data ?? [];
@@ -95,7 +95,7 @@ export default function BookMealScreen({ navigation }) {
         setSpecials(withImages);
       })
       .catch(() => setSpecials([]));
-  }, []);
+  }, []); */
 
   useEffect(() => {
     api.get('/MealPricing')
