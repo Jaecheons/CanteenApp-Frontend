@@ -254,7 +254,7 @@ export default function AdminDashboard({ navigation }) {
                       </View>
                       <View style={styles.categoryChip}>
                         <Text style={styles.categoryChipCount}>{cat.addOns}</Text>
-                        <Text style={styles.categoryChipLabel}>Add-Ons</Text>
+                        <Text style={styles.categoryChipLabel}>Omelet</Text>
                       </View>
                     </View>
                   )}
@@ -567,7 +567,7 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 12, color: '#888', marginTop: 4 },
   outletListBox: { marginBottom: 16 },
   mealTotalsBox: {
-    backgroundColor: '#fff', borderRadius: 12,
+    backgroundColor: '#b4d0e4', borderRadius: 12,
     elevation: 2, overflow: 'hidden', marginBottom: 16,
   },
   mealTotalCard: {
@@ -585,7 +585,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingBottom: 14,
   },
   categoryChip: {
-    backgroundColor: '#e8f4fd', borderRadius: 10,
+    backgroundColor: '#fde8e8', borderRadius: 10,
     paddingVertical: 8, paddingHorizontal: 10, alignItems: 'center', minWidth: 64,
     borderLeftWidth: 3, borderLeftColor: '#005f99',
   },
