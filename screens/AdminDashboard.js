@@ -17,6 +17,7 @@ const STATUS_COLORS = {
 
 const OUTLETS = ['Central Canteen', 'Administrative Building', 'Central Control Room', 'Central Workshop'];
 const MEAL_TYPES = ['Breakfast', 'Lunch', 'Evening Snacks', 'Dinner'];
+const CATEGORY_MEAL_TYPES = ['Lunch', 'Dinner'];
 
 export default function AdminDashboard({ navigation }) {
   const [bookings, setBookings] = useState([]);
@@ -26,6 +27,7 @@ export default function AdminDashboard({ navigation }) {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedOutlet, setExpandedOutlet] = useState(null);
+  const [expandedMealTotal, setExpandedMealTotal] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -103,6 +105,34 @@ export default function AdminDashboard({ navigation }) {
           b.status?.toLowerCase() === 'confirmed'
       ).length,
     })).filter((m) => m.count > 0);
+  };
+
+  // Across ALL outlets, today's confirmed bookings — total per meal type
+  const mealTypeTotals = MEAL_TYPES.map((meal) => ({
+    meal,
+    count: todayBookings.filter(
+      (b) => b.mealType === meal && b.status?.toLowerCase() === 'confirmed'
+    ).length,
+  }));
+
+  // Across ALL outlets — veg/paneer/non-veg/add-on breakdown for a given meal type
+  const getCategoryTotalsForMeal = (mealType) => {
+    const rows = todayBookings.filter(
+      (b) => b.mealType === mealType && b.status?.toLowerCase() === 'confirmed'
+    );
+    return {
+      veg: rows.reduce((s, b) => s + (b.vegCount ?? 0), 0),
+      paneer: rows.reduce((s, b) => s + (b.paneerCount ?? 0), 0),
+      nonVeg: rows.reduce((s, b) => s + (b.nonVegCount ?? 0), 0),
+      addOns: rows.reduce(
+        (s, b) => s + (b.addOns ?? []).reduce((a, x) => a + (x.quantity ?? 0), 0),
+        0
+      ),
+    };
+  };
+
+  const toggleMealTotal = (meal) => {
+    setExpandedMealTotal((prev) => (prev === meal ? null : meal));
   };
 
   // Filter bookings by search query
@@ -194,6 +224,56 @@ export default function AdminDashboard({ navigation }) {
               <Text style={[styles.statNumber, { color: '#c0392b' }]}>{cancelled}</Text>
               <Text style={styles.statLabel}>Cancelled</Text>
             </View>
+          </View>
+
+          {/* Meal-Type Totals — across all outlets, tap Lunch/Dinner to expand */}
+          <Text style={styles.sectionLabel}>Today's Meals — All Outlets</Text>
+          <View style={styles.mealTotalsBox}>
+            {mealTypeTotals.map(({ meal, count }) => {
+              const canExpand = CATEGORY_MEAL_TYPES.includes(meal) && count > 0;
+              const isExpanded = expandedMealTotal === meal;
+              const cat = isExpanded ? getCategoryTotalsForMeal(meal) : null;
+
+              return (
+                <View key={meal} style={styles.mealTotalCard}>
+                  <TouchableOpacity
+                    style={styles.mealTotalHeader}
+                    onPress={() => canExpand && toggleMealTotal(meal)}
+                    disabled={!canExpand}
+                    activeOpacity={canExpand ? 0.8 : 1}
+                  >
+                    <Text style={styles.mealTotalLabel}>{meal}</Text>
+                    <View style={styles.mealTotalRight}>
+                      <Text style={styles.mealTotalCount}>{count}</Text>
+                      {canExpand && (
+                        <Text style={styles.chevron}>{isExpanded ? '▲' : '▼'}</Text>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+
+                  {isExpanded && cat && (
+                    <View style={styles.categoryRow}>
+                      <View style={styles.categoryChip}>
+                        <Text style={styles.categoryChipCount}>{cat.veg}</Text>
+                        <Text style={styles.categoryChipLabel}>Veg</Text>
+                      </View>
+                      <View style={styles.categoryChip}>
+                        <Text style={styles.categoryChipCount}>{cat.paneer}</Text>
+                        <Text style={styles.categoryChipLabel}>Paneer</Text>
+                      </View>
+                      <View style={styles.categoryChip}>
+                        <Text style={styles.categoryChipCount}>{cat.nonVeg}</Text>
+                        <Text style={styles.categoryChipLabel}>Non-Veg</Text>
+                      </View>
+                      <View style={styles.categoryChip}>
+                        <Text style={styles.categoryChipCount}>{cat.addOns}</Text>
+                        <Text style={styles.categoryChipLabel}>Add-Ons</Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
           </View>
 
           {/* Per Outlet — tap to expand */}
@@ -499,6 +579,31 @@ const styles = StyleSheet.create({
   statNumber: { fontSize: 24, fontWeight: 'bold', color: '#1a1a1a' },
   statLabel: { fontSize: 12, color: '#888', marginTop: 4 },
   outletListBox: { marginBottom: 16 },
+  mealTotalsBox: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16,
+  },
+  mealTotalCard: {
+    backgroundColor: '#fff', borderRadius: 12,
+    elevation: 2, overflow: 'hidden', minWidth: '47%', flexGrow: 1,
+  },
+  mealTotalHeader: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', padding: 14,
+  },
+  mealTotalLabel: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
+  mealTotalRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  mealTotalCount: { fontSize: 18, fontWeight: 'bold', color: '#005f99' },
+  categoryRow: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 8,
+    paddingHorizontal: 14, paddingBottom: 14,
+  },
+  categoryChip: {
+    backgroundColor: '#e8f4fd', borderRadius: 10,
+    paddingVertical: 8, paddingHorizontal: 10, alignItems: 'center', minWidth: 64,
+    borderLeftWidth: 3, borderLeftColor: '#005f99',
+  },
+  categoryChipCount: { fontSize: 15, fontWeight: 'bold', color: '#005f99' },
+  categoryChipLabel: { fontSize: 10, color: '#555', marginTop: 2 },
   outletCard: {
     backgroundColor: '#fff', borderRadius: 12,
     marginBottom: 10, elevation: 2, overflow: 'hidden',
