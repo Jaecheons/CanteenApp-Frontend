@@ -154,8 +154,10 @@ export default function OutletBookingsScreen({ navigation, route }) {
           </View>
         </View>
         <Text style={styles.employeeName}>
-          {item.employeeName ?? item.newUserName} Employee #{item.employeeID ?? (item.newUserID || '—')}
-        </Text>
+                  {item.employeeID
+                    ? `${item.employeeName ?? 'Unknown'} (EmpId: ${item.employeeID})`
+                    : `${item.employeeName ?? 'Unknown'}`}
+                </Text>
         <Text style={styles.mealType}>
           {item.isSpecialMeal ? 'Special - ' : ''}{item.mealType}
         </Text>

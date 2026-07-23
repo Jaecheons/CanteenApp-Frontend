@@ -27,7 +27,6 @@ export default function AdminDashboard({ navigation }) {
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedOutlet, setExpandedOutlet] = useState(null);
-  const [expandedMealTotal, setExpandedMealTotal] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
 
   const todayStr = new Date().toISOString().split('T')[0];
@@ -131,10 +130,6 @@ export default function AdminDashboard({ navigation }) {
     };
   };
 
-  const toggleMealTotal = (meal) => {
-    setExpandedMealTotal((prev) => (prev === meal ? null : meal));
-  };
-
   // Filter bookings by search query
   const filteredBookings = bookings.filter((b) => {
     if (!searchQuery.trim()) return true;
@@ -226,32 +221,24 @@ export default function AdminDashboard({ navigation }) {
             </View>
           </View>
 
-          {/* Meal-Type Totals — across all outlets, tap Lunch/Dinner to expand */}
+          {/* Meal-Type Totals — across all outlets; Lunch/Dinner always show their breakdown */}
           <Text style={styles.sectionLabel}>Today's Meals — All Outlets</Text>
           <View style={styles.mealTotalsBox}>
-            {mealTypeTotals.map(({ meal, count }) => {
-              const canExpand = CATEGORY_MEAL_TYPES.includes(meal) && count > 0;
-              const isExpanded = expandedMealTotal === meal;
-              const cat = isExpanded ? getCategoryTotalsForMeal(meal) : null;
+            {mealTypeTotals.map(({ meal, count }, index) => {
+              const showCategories = CATEGORY_MEAL_TYPES.includes(meal) && count > 0;
+              const cat = showCategories ? getCategoryTotalsForMeal(meal) : null;
 
               return (
-                <View key={meal} style={styles.mealTotalCard}>
-                  <TouchableOpacity
-                    style={styles.mealTotalHeader}
-                    onPress={() => canExpand && toggleMealTotal(meal)}
-                    disabled={!canExpand}
-                    activeOpacity={canExpand ? 0.8 : 1}
-                  >
+                <View
+                  key={meal}
+                  style={[styles.mealTotalCard, index === mealTypeTotals.length - 1 && styles.mealTotalCardLast]}
+                >
+                  <View style={styles.mealTotalHeader}>
                     <Text style={styles.mealTotalLabel}>{meal}</Text>
-                    <View style={styles.mealTotalRight}>
-                      <Text style={styles.mealTotalCount}>{count}</Text>
-                      {canExpand && (
-                        <Text style={styles.chevron}>{isExpanded ? '▲' : '▼'}</Text>
-                      )}
-                    </View>
-                  </TouchableOpacity>
+                    <Text style={styles.mealTotalCount}>{count}</Text>
+                  </View>
 
-                  {isExpanded && cat && (
+                  {cat && (
                     <View style={styles.categoryRow}>
                       <View style={styles.categoryChip}>
                         <Text style={styles.categoryChipCount}>{cat.veg}</Text>
@@ -580,19 +567,19 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 12, color: '#888', marginTop: 4 },
   outletListBox: { marginBottom: 16 },
   mealTotalsBox: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16,
+    backgroundColor: '#fff', borderRadius: 12,
+    elevation: 2, overflow: 'hidden', marginBottom: 16,
   },
   mealTotalCard: {
-    backgroundColor: '#fff', borderRadius: 12,
-    elevation: 2, overflow: 'hidden', minWidth: '47%', flexGrow: 1,
+    borderBottomWidth: 1, borderBottomColor: '#f0f0f0',
   },
+  mealTotalCardLast: { borderBottomWidth: 0 },
   mealTotalHeader: {
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', padding: 14,
   },
   mealTotalLabel: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
-  mealTotalRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  mealTotalCount: { fontSize: 18, fontWeight: 'bold', color: '#005f99' },
+  mealTotalCount: { fontSize: 18, fontWeight: 'bold', color: '#005f99', minWidth: 28, textAlign: 'right' },
   categoryRow: {
     flexDirection: 'row', flexWrap: 'wrap', gap: 8,
     paddingHorizontal: 14, paddingBottom: 14,

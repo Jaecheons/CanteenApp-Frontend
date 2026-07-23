@@ -136,8 +136,10 @@ export default function CollectionChecklistScreen() {
 
         <View style={styles.cardLeft}>
           <Text style={styles.employeeName}>
-            {item.employeeName || `Employee #${item.employeeID ?? item.newUserID}`}
-          </Text>
+                    {item.employeeID
+                      ? `${item.employeeName ?? 'Unknown'} (EmpId: ${item.employeeID})`
+                      : `${item.employeeName ?? 'Unknown'}`}
+                  </Text>
           <Text style={styles.mealInfo}>
             {item.isSpecialMeal ? 'Special - ' : ''}{item.mealType} · {item.canteenLocation}
           </Text>
